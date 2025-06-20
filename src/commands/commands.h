@@ -1,0 +1,11 @@
+#ifndef COMMANDS_H
+#define COMMANDS_H
+
+// Command function declarations
+int cmd_init(int argc, char* argv[]);
+int cmd_add(int argc, char* argv[]);
+int cmd_commit(int argc, char* argv[]);
+int cmd_status(int argc, char* argv[]);
+int cmd_log(int argc, char* argv[]);
+
+#endif
