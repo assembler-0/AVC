@@ -21,6 +21,10 @@ int main(int argc, char* argv[]) {
         return cmd_status(argc - 1, argv + 1);
     } else if (strcmp(command, "log") == 0) {
         return cmd_log(argc - 1, argv + 1);
+    } else if (strcmp(command, "rm") == 0) {
+        return cmd_rm(argc - 1, argv + 1);
+    } else if (strcmp(command, "reset") == 0) {
+        return cmd_reset(argc - 1, argv + 1);
     } else {
         printf("Unknown command: %s\n", command);
         return 1;

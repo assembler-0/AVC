@@ -18,19 +18,14 @@ add_executable(avc ${SOURCES})
 
 # Link libraries (you'll need OpenSSL for SHA-1)
 find_package(OpenSSL REQUIRED)
-target_link_libraries(avc OpenSSL::SSL OpenSSL::Crypto)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ZLIB REQUIRED zlib)
+target_link_libraries(avc OpenSSL::SSL OpenSSL::Crypto ${ZLIB_LIBRARIES})
 
 # Install configuration
 install(TARGETS avc
         RUNTIME DESTINATION bin
         COMPONENT Runtime)
-
-# Optional: Install man page or documentation
-# install(FILES docs/avc.1
-#     DESTINATION share/man/man1
-#     COMPONENT Documentation)
-
-# Set default install prefix if not specified
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Install prefix" FORCE)
 endif()
