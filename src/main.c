@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        printf("Usage: dev <command> [args]\n");
+        printf("Usage: avc <command> [args]\n");
         printf("Commands: init, add, commit, status, log\n");
         return 1;
     }
