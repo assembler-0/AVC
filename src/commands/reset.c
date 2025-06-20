@@ -1,4 +1,3 @@
-
 // src/commands/reset.c
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,27 +47,46 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     }
 
     // Parse tree and restore files
-    char* line = strtok(tree_content, "\n");
-    while (line) {
+    // Instead of using strtok which modifies the string, let's parse line by line
+    char* content_copy = malloc(tree_size + 1);
+    if (!content_copy) {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(tree_content);
+        return -1;
+    }
+    memcpy(content_copy, tree_content, tree_size);
+    content_copy[tree_size] = '\0';
+
+    char* line_start = content_copy;
+    char* line_end;
+
+    while ((line_end = strchr(line_start, '\n')) != NULL) {
+        *line_end = '\0'; // Null-terminate the line
+
         unsigned int mode;
         char filepath[256], file_hash[65]; // 64 chars + null terminator
 
-        if (sscanf(line, "%o %255s %64s", &mode, filepath, file_hash) == 3) {
+        if (sscanf(line_start, "%o %255s %64s", &mode, filepath, file_hash) == 3) {
             // Load file content
             size_t file_size;
             char file_type[16];
             char* file_content = load_object(file_hash, &file_size, file_type);
+
             if (file_content && strcmp(file_type, "blob") == 0) {
                 if (hard_reset) {
                     // Write file to working directory
                     if (write_file(filepath, file_content, file_size) == -1) {
                         fprintf(stderr, "Failed to restore file: %s\n", filepath);
+                        free(file_content);
+                        line_start = line_end + 1;
+                        continue; // Skip this file but continue with others
                     } else {
                         printf("Restored: %s\n", filepath);
                     }
                 }
 
-                // Add to index
+                // Add to index using the same format as used elsewhere
+                // Format: hash filepath mode
                 FILE* index = fopen(".avc/index", "a");
                 if (index) {
                     fprintf(index, "%s %s %o\n", file_hash, filepath, mode);
@@ -76,10 +94,16 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
                 }
 
                 free(file_content);
+            } else {
+                fprintf(stderr, "Failed to load file object: %s (hash: %s)\n", filepath, file_hash);
+                if (file_content) free(file_content);
             }
         }
-        line = strtok(NULL, "\n");
+
+        line_start = line_end + 1;
     }
+
+    free(content_copy);
     free(tree_content);
 
     // Update HEAD to point to this commit
@@ -98,6 +122,9 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
                 if (branch_file) {
                     fprintf(branch_file, "%s\n", commit_hash);
                     fclose(branch_file);
+                    printf("Updated HEAD to point to commit %s\n", commit_hash);
+                } else {
+                    fprintf(stderr, "Failed to update branch reference\n");
                 }
             }
         }
@@ -139,11 +166,14 @@ int cmd_reset(int argc, char* argv[]) {
 
     char resolved_hash[65]; // SHA-256 hash (64 hex + null)
 
-    // FIX: Properly handle HEAD and HEAD~1 resolution
+    // Handle HEAD and HEAD~1 resolution
     if (strcmp(target_hash_str, "HEAD") == 0 || strcmp(target_hash_str, "HEAD~1") == 0) {
         // Get the current commit hash from the current branch
         FILE* head_file = fopen(".avc/HEAD", "r");
-        if (!head_file) { perror("Failed to open .avc/HEAD"); return 1; }
+        if (!head_file) {
+            perror("Failed to open .avc/HEAD");
+            return 1;
+        }
 
         char head_content[256];
         if (!fgets(head_content, sizeof(head_content), head_file)) {
@@ -187,16 +217,30 @@ int cmd_reset(int argc, char* argv[]) {
                 return 1;
             }
 
-            char* line = strtok(commit_content, "\n");
+            // Parse commit content line by line to find parent
+            char* content_copy = malloc(commit_size + 1);
+            if (!content_copy) {
+                fprintf(stderr, "Memory allocation failed\n");
+                free(commit_content);
+                return 1;
+            }
+            memcpy(content_copy, commit_content, commit_size);
+            content_copy[commit_size] = '\0';
+            free(commit_content);
+
+            char* line_start = content_copy;
+            char* line_end;
             int parent_found = 0;
-            while (line) {
-                if (sscanf(line, "parent %64s", resolved_hash) == 1) {
+
+            while ((line_end = strchr(line_start, '\n')) != NULL) {
+                *line_end = '\0';
+                if (sscanf(line_start, "parent %64s", resolved_hash) == 1) {
                     parent_found = 1;
                     break;
                 }
-                line = strtok(NULL, "\n");
+                line_start = line_end + 1;
             }
-            free(commit_content);
+            free(content_copy);
 
             if (!parent_found) {
                 fprintf(stderr, "HEAD has no parent commit to reset to.\n");
