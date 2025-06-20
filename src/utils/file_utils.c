@@ -6,6 +6,16 @@
 #include <libgen.h>
 #include <errno.h>
 
+char* strdup2(const char* s) {
+    if (!s) return NULL;
+    size_t len = strlen(s) + 1;
+    char* copy = malloc(len);
+    if (copy) {
+        memcpy(copy, s, len);
+    }
+    return copy;
+}
+
 char* read_file(const char* filepath, size_t* size) {
     FILE* file = fopen(filepath, "rb");
     if (!file) {
@@ -35,7 +45,7 @@ char* read_file(const char* filepath, size_t* size) {
 
 // Create directory recursively (helper function)
 static int create_directories(const char* path) {
-    char* path_copy = strdup(path);
+    char* path_copy = strdup2(path);
     if (!path_copy) {
         return -1;
     }
@@ -68,7 +78,7 @@ static int create_directories(const char* path) {
 
 int write_file(const char* filepath, const char* content, size_t size) {
     // Create directory structure if it doesn't exist
-    char* filepath_copy = strdup(filepath);
+    char* filepath_copy = strdup2(filepath);
     if (!filepath_copy) {
         fprintf(stderr, "Memory allocation failed\n");
         return -1;

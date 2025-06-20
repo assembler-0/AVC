@@ -8,6 +8,7 @@
 #include "repository.h"
 #include "objects.h"
 #include "index.h"
+
 int create_tree(char* tree_hash) {
     FILE* index = fopen(".avc/index", "r");
     if (!index) {
@@ -28,10 +29,10 @@ int create_tree(char* tree_hash) {
 
     char line[1024];
     while (fgets(line, sizeof(line), index)) {
-        char hash[41], filepath[256];
+        char hash[65], filepath[256]; // Updated to 64 chars for SHA-256
         unsigned int mode;
 
-        if (sscanf(line, "%40s %255s %o", hash, filepath, &mode) == 3) {
+        if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
             // Create entry: mode filepath hash
             char entry[512];
             int entry_len = snprintf(entry, sizeof(entry), "%o %s %s\n", mode, filepath, hash);
@@ -98,7 +99,7 @@ int get_current_commit(char* commit_hash) {
             return 0;
         }
 
-        if (fgets(commit_hash, 41, branch_file)) {
+        if (fgets(commit_hash, 65, branch_file)) { // Updated to 65 for SHA-256
             commit_hash[strcspn(commit_hash, "\n")] = '\0';  // Remove newline
         } else {
             commit_hash[0] = '\0';
@@ -177,13 +178,13 @@ int cmd_commit(int argc, char* argv[]) {
     }
 
     // Create tree from index
-    char tree_hash[41];
+    char tree_hash[65]; // Updated to 65 for SHA-256
     if (create_tree(tree_hash) == -1) {
         return 1;
     }
 
     // Get parent commit
-    char parent_hash[41];
+    char parent_hash[65]; // Updated to 65 for SHA-256
     get_current_commit(parent_hash);
 
     // Create commit object
@@ -203,7 +204,7 @@ int cmd_commit(int argc, char* argv[]) {
     }
 
     // Generate commit hash and store object
-    char commit_hash[41];
+    char commit_hash[65]; // Updated to 65 for SHA-256
     if (store_object("commit", commit_content, strlen(commit_content), commit_hash) == -1) {
         fprintf(stderr, "Failed to create commit object\n");
         return 1;
@@ -223,5 +224,4 @@ int cmd_commit(int argc, char* argv[]) {
     printf("[main %.7s] %s\n", commit_hash, message);
 
     return 0;
-
 }

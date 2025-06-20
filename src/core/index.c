@@ -1,3 +1,4 @@
+
 //
 // Created by Atheria on 6/20/25.
 //
@@ -8,7 +9,111 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "objects.h"
-#include "../utils/file_utils.h"
+#include "file_utils.h"
+
+// Check if file is already in index with same hash
+int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
+    FILE* index = fopen(".avc/index", "r");
+    if (!index) {
+        return 0; // No index, file not staged
+    }
+
+    char line[1024];
+    while (fgets(line, sizeof(line), index)) {
+        char hash[65], indexed_filepath[256]; // 64 chars + null terminator
+        unsigned int mode;
+
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
+            if (strcmp(indexed_filepath, filepath) == 0) {
+                fclose(index);
+                return (strcmp(hash, new_hash) == 0); // Return 1 if unchanged, 0 if changed
+            }
+        }
+    }
+    fclose(index);
+    return 0; // Not found in index
+}
+
+// Remove file from index (if it exists)
+int remove_file_from_index_if_exists(const char* filepath) {
+    FILE* index = fopen(".avc/index", "r");
+    if (!index) {
+        return 0; // No index file
+    }
+
+    // Read all lines except the one we want to remove
+    char** lines = NULL;
+    size_t line_count = 0;
+    size_t capacity = 10;
+    lines = malloc(capacity * sizeof(char*));
+    if (!lines) {
+        fclose(index);
+        return -1;
+    }
+
+    char line[1024];
+    int found = 0;
+
+    while (fgets(line, sizeof(line), index)) {
+        char hash[65], indexed_filepath[256];
+        unsigned int mode;
+
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
+            if (strcmp(indexed_filepath, filepath) == 0) {
+                found = 1;
+                continue; // Skip this line
+            }
+        }
+
+        // Grow array if needed
+        if (line_count >= capacity) {
+            capacity *= 2;
+            char** new_lines = realloc(lines, capacity * sizeof(char*));
+            if (!new_lines) {
+                for (size_t i = 0; i < line_count; i++) {
+                    free(lines[i]);
+                }
+                free(lines);
+                fclose(index);
+                return -1;
+            }
+            lines = new_lines;
+        }
+
+        // Store the line
+        lines[line_count] = malloc(strlen(line) + 1);
+        if (!lines[line_count]) {
+            for (size_t i = 0; i < line_count; i++) {
+                free(lines[i]);
+            }
+            free(lines);
+            fclose(index);
+            return -1;
+        }
+        strcpy(lines[line_count], line);
+        line_count++;
+    }
+    fclose(index);
+
+    // Rewrite index
+    index = fopen(".avc/index", "w");
+    if (!index) {
+        for (size_t i = 0; i < line_count; i++) {
+            free(lines[i]);
+        }
+        free(lines);
+        return -1;
+    }
+
+    for (size_t i = 0; i < line_count; i++) {
+        fputs(lines[i], index);
+        free(lines[i]);
+    }
+    free(lines);
+    fclose(index);
+
+    return found;
+}
 
 // Add file to staging area
 int add_file_to_index(const char* filepath) {
@@ -27,12 +132,22 @@ int add_file_to_index(const char* filepath) {
         return -1;
     }
 
-    char hash[41];
+    char hash[65]; // 64 chars + null terminator for SHA-256
     if (store_object("blob", content, size, hash) == -1) {
         free(content);
         fprintf(stderr, "Failed to store object for file: %s\n", filepath);
         return -1;
     }
+
+    // Check if file is already staged with same content
+    if (is_file_unchanged_in_index(filepath, hash)) {
+        printf("File '%s' already staged with same content\n", filepath);
+        free(content);
+        return 0;
+    }
+
+    // Remove file from index if it already exists (to update it)
+    remove_file_from_index_if_exists(filepath);
 
     // Add entry to index
     FILE* index = fopen(".avc/index", "a");
@@ -61,10 +176,10 @@ int is_file_in_index(const char* filepath) {
 
     char line[1024];
     while (fgets(line, sizeof(line), index)) {
-        char hash[41], indexed_filepath[256];
+        char hash[65], indexed_filepath[256]; // Updated to 64 chars
         unsigned int mode;
 
-        if (sscanf(line, "%40s %255s %o", hash, indexed_filepath, &mode) == 3) {
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
             if (strcmp(indexed_filepath, filepath) == 0) {
                 fclose(index);
                 return 1; // Found in index
@@ -98,10 +213,10 @@ int remove_file_from_index(const char* filepath) {
     int found = 0;
 
     while (fgets(line, sizeof(line), index)) {
-        char hash[41], indexed_filepath[256];
+        char hash[65], indexed_filepath[256]; // Updated to 64 chars
         unsigned int mode;
 
-        if (sscanf(line, "%40s %255s %o", hash, indexed_filepath, &mode) == 3) {
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
             // Skip the file we want to remove
             if (strcmp(indexed_filepath, filepath) == 0) {
                 found = 1;
