@@ -1,4 +1,3 @@
-
 //
 // Created by Atheria on 6/20/25.
 //
@@ -10,6 +9,7 @@
 #include <sys/stat.h>
 #include "objects.h"
 #include "file_utils.h"
+#include <dirent.h>
 
 // Check if file is already in index with same hash
 int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
@@ -117,11 +117,32 @@ int remove_file_from_index_if_exists(const char* filepath) {
 
 // Add file to staging area
 int add_file_to_index(const char* filepath) {
-    // Check if file exists
     struct stat st;
     if (stat(filepath, &st) == -1) {
         fprintf(stderr, "File not found: %s\n", filepath);
         return -1;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        DIR* dir = opendir(filepath);
+        if (!dir) {
+            fprintf(stderr, "Failed to open directory: %s\n", filepath);
+            return -1;
+        }
+        struct dirent* entry;
+        int result = 0;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            char child_path[1024];
+            snprintf(child_path, sizeof(child_path), "%s/%s", filepath, entry->d_name);
+            if (add_file_to_index(child_path) == -1) {
+                result = -1;
+            }
+        }
+        closedir(dir);
+        return result;
     }
 
     // Read file content

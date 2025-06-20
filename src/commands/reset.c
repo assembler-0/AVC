@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <errno.h>
+#include <dirent.h>
+#include <unistd.h>
 #include "commands.h"
 #include "repository.h"
 #include "index.h"
@@ -36,6 +38,31 @@ int create_directory_recursive(const char* path) {
 
     free(path_copy);
     return 0;
+}
+
+// Recursively delete all files and directories except .avc, .git, .idea
+static int clean_working_directory(const char* path) {
+    DIR* dir = opendir(path);
+    if (!dir) return -1;
+    struct dirent* entry;
+    int result = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        if (strcmp(entry->d_name, ".avc") == 0 || strcmp(entry->d_name, ".git") == 0 || strcmp(entry->d_name, ".idea") == 0) continue;
+        char fullpath[1024];
+        snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
+        struct stat st;
+        if (stat(fullpath, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                if (clean_working_directory(fullpath) == -1) result = -1;
+                if (rmdir(fullpath) == -1) result = -1;
+            } else {
+                if (unlink(fullpath) == -1) result = -1;
+            }
+        }
+    }
+    closedir(dir);
+    return result;
 }
 
 // Reset working directory to match a commit
@@ -261,20 +288,24 @@ int cmd_reset(int argc, char* argv[]) {
     }
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: avc reset [--hard] <commit-hash>\n");
+        fprintf(stderr, "Usage: avc reset [--hard] [--clean] <commit-hash>\n");
         fprintf(stderr, "  --hard: Reset working directory and index\n");
+        fprintf(stderr, "  --clean: Wipe working directory (except .avc, .git, .idea) before restoring\n");
         fprintf(stderr, "  (default): Reset only index, keep working directory\n");
-        fprintf(stderr, "  You can also use: avc reset [--hard] HEAD~1  (previous commit)\n");
+        fprintf(stderr, "  You can also use: avc reset [--hard] [--clean] HEAD~1  (previous commit)\n");
         return 1;
     }
 
     int hard_reset = 0;
+    int clean_flag = 0;
     char* target_hash_str = NULL;
 
     // Parse arguments
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--hard") == 0) {
             hard_reset = 1;
+        } else if (strcmp(argv[i], "--clean") == 0) {
+            clean_flag = 1;
         } else {
             target_hash_str = argv[i];
         }
@@ -391,6 +422,26 @@ int cmd_reset(int argc, char* argv[]) {
         fprintf(stderr, "Invalid commit hash format (expected 64 characters, got %zu)\n", strlen(target_hash_str));
         fprintf(stderr, "Use 'avc log' to see available commit hashes\n");
         return 1;
+    }
+
+    if (clean_flag) {
+        printf("WARNING: This will delete ALL files and directories in the current directory except .avc, .git, and .idea.\n");
+        printf("Are you sure you want to continue? Type 'yes' to confirm: ");
+        char answer[16];
+        if (!fgets(answer, sizeof(answer), stdin)) {
+            fprintf(stderr, "Failed to read input. Aborting.\n");
+            return 1;
+        }
+        answer[strcspn(answer, "\n")] = '\0';
+        if (strcmp(answer, "yes") != 0) {
+            printf("Aborted by user.\n");
+            return 1;
+        }
+        if (clean_working_directory(".") == -1) {
+            fprintf(stderr, "Failed to clean working directory.\n");
+            return 1;
+        }
+        printf("Working directory cleaned.\n");
     }
 
     printf("Resetting to commit %s%s...\n", target_hash_str, hard_reset ? " (hard)" : "");

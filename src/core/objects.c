@@ -153,7 +153,7 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     char* decompressed = NULL;
     size_t actual_decompressed_size = 0;
 
-    for (int attempts = 0; attempts < 8; attempts++) {
+    for (int attempts = 0; attempts < 64; attempts++) {
         printf("DEBUG: Decompression attempt %d with buffer size %zu\n", attempts + 1, try_size);
 
         char* temp_buffer = malloc(try_size + 1);
