@@ -11,7 +11,7 @@
 #include "objects.h"
 int store_object(const char* type, const char* content, size_t size, char* hash_out) {
     // Generate hash
-    sha1_hash_object(type, content, size, hash_out);
+    sha256_hash_object(type, content, size, hash_out);
 
     // Create object path: .avc/objects/ab/cdef123... (Git-style subdirectories)
     char obj_dir[512], obj_path[512];

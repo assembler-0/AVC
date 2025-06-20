@@ -7,7 +7,7 @@
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
-
+#include "index.h"
 int create_tree(char* tree_hash) {
     FILE* index = fopen(".avc/index", "r");
     if (!index) {
@@ -216,12 +216,12 @@ int cmd_commit(int argc, char* argv[]) {
     }
 
     // Clear index
-    FILE* index = fopen(".avc/index", "w");
-    if (index) {
-        fclose(index);
+    if (clear_index() == -1) {
+        fprintf(stderr, "Warning: Failed to clear index after commit\n");
     }
 
     printf("[main %.7s] %s\n", commit_hash, message);
 
     return 0;
+
 }

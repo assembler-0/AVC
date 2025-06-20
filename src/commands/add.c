@@ -1,52 +1,8 @@
 // src/commands/add.c
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
 #include "commands.h"
 #include "repository.h"
-#include "file_utils.h"
-#include "objects.h"
-// Add file to staging area
-int add_file_to_index(const char* filepath) {
-    // Check if file exists
-    struct stat st;
-    if (stat(filepath, &st) == -1) {
-        fprintf(stderr, "File not found: %s\n", filepath);
-        return -1;
-    }
-
-    // Read file content
-    size_t size;
-    char* content = read_file(filepath, &size);
-    if (!content) {
-        fprintf(stderr, "Failed to read file: %s\n", filepath);
-        return -1;
-    }
-
-    char hash[41];
-    if (store_object("blob", content, size, hash) == -1) {
-        free(content);
-        fprintf(stderr, "Failed to store object for file: %s\n", filepath);
-        return -1;
-    }
-
-    // Add entry to index
-    FILE* index = fopen(".avc/index", "a");
-    if (!index) {
-        free(content);
-        perror("Failed to open index");
-        return -1;
-    }
-
-    // Write index entry: hash filepath mode
-    fprintf(index, "%s %s %o\n", hash, filepath, (unsigned int)st.st_mode);
-    fclose(index);
-
-    printf("Added '%s' to staging area (hash: %.8s)\n", filepath, hash);
-
-    free(content);
-    return 0;
-}
+#include "index.h"
 
 int cmd_add(int argc, char* argv[]) {
     if (check_repo() == -1) {

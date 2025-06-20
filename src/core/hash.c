@@ -4,20 +4,20 @@
 #include <string.h>
 #include <openssl/sha.h>
 #include "hash.h"
-void sha1_hash(const char* content, size_t size, char* hash_out) {
-    unsigned char hash[SHA_DIGEST_LENGTH];
-    SHA1((unsigned char*)content, size, hash);
+#define HASH_SIZE 64
+void sha256_hash(const char* content, size_t size, char* hash_out) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)content, size, hash);
 
-    // Convert binary hash to hex string
-    for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
         sprintf(hash_out + (i * 2), "%02x", hash[i]);
     }
-    hash_out[40] = '\0';  // Null terminate
+    hash_out[64] = '\0';
 }
 
 // Hash with Git-style object format
 // Git prepends "blob <size>\0" before hashing
-void sha1_hash_object(const char* type, const char* content, size_t size, char* hash_out) {
+void sha256_hash_object(const char* type, const char* content, size_t size, char* hash_out) {
     // Create Git-style object format
     char header[64];
     int header_len = snprintf(header, sizeof(header), "%s %zu", type, size);
@@ -36,7 +36,7 @@ void sha1_hash_object(const char* type, const char* content, size_t size, char* 
     memcpy(full_content + header_len + 1, content, size);
 
     // Hash the full content
-    sha1_hash(full_content, total_size, hash_out);
+    sha256_hash(full_content, total_size, hash_out);
 
     free(full_content);
 }

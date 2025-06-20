@@ -1,3 +1,4 @@
+
 //
 // Created by Atheria on 6/20/25.
 //
@@ -5,4 +6,12 @@
 #ifndef INDEX_H
 #define INDEX_H
 
-#endif //INDEX_H
+#include <stddef.h>
+
+// Index management functions
+int add_file_to_index(const char* filepath);
+int remove_file_from_index(const char* filepath);
+int is_file_in_index(const char* filepath);
+int clear_index(void);
+
+#endif
