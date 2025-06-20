@@ -4,16 +4,10 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include "commands.h"
+#include "repository.h"
+#include "objects.h"
 
-// Check if we're in a repository (defined in add.c)
-int check_repo();
-
-// Simple hash function (same as in add.c - we'll refactor this later)
-int store_object(const char* type, const char* content, size_t size, char* hash_out);
-
-// Create tree object from current index
 int create_tree(char* tree_hash) {
     FILE* index = fopen(".avc/index", "r");
     if (!index) {
@@ -21,25 +15,52 @@ int create_tree(char* tree_hash) {
         return -1;
     }
 
-    // Create tree content
-    char tree_content[4096] = "";
-    char line[1024];
+    // Start with initial buffer size and grow as needed
+    size_t buffer_size = 8192;
+    size_t content_len = 0;
+    char* tree_content = malloc(buffer_size);
+    if (!tree_content) {
+        fprintf(stderr, "Memory allocation failed\n");
+        fclose(index);
+        return -1;
+    }
+    tree_content[0] = '\0';
 
+    char line[1024];
     while (fgets(line, sizeof(line), index)) {
         char hash[41], filepath[256];
         unsigned int mode;
 
         if (sscanf(line, "%40s %255s %o", hash, filepath, &mode) == 3) {
-            // Add to tree: mode filepath hash
+            // Create entry: mode filepath hash
             char entry[512];
-            snprintf(entry, sizeof(entry), "%o %s %s\n", mode, filepath, hash);
+            int entry_len = snprintf(entry, sizeof(entry), "%o %s %s\n", mode, filepath, hash);
+
+            // Check if we need to grow the buffer
+            if (content_len + entry_len + 1 > buffer_size) {
+                buffer_size *= 2;
+                char* new_buffer = realloc(tree_content, buffer_size);
+                if (!new_buffer) {
+                    fprintf(stderr, "Memory reallocation failed\n");
+                    free(tree_content);
+                    fclose(index);
+                    return -1;
+                }
+                tree_content = new_buffer;
+            }
+
+            // Safe concatenation
             strcat(tree_content, entry);
+            content_len += entry_len;
         }
     }
     fclose(index);
 
     // Generate tree hash
-    if (store_object("tree", tree_content, strlen(tree_content), tree_hash) == -1) {
+    int result = store_object("tree", tree_content, strlen(tree_content), tree_hash);
+    free(tree_content);
+
+    if (result == -1) {
         return -1;
     }
 
@@ -181,7 +202,6 @@ int cmd_commit(int argc, char* argv[]) {
                 tree_hash, author, now, author, now, message);
     }
 
-    // Generate commit hash
     // Generate commit hash and store object
     char commit_hash[41];
     if (store_object("commit", commit_content, strlen(commit_content), commit_hash) == -1) {

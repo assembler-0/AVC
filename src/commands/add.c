@@ -1,18 +1,11 @@
 // src/commands/add.c
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
-#include <errno.h>
 #include "commands.h"
-
-// Check if we're in a repository
-int check_repo();
-
-// Read file content
-char* read_file(const char* filepath, size_t* size);
-
-int store_object(const char* type, const char* content, size_t size, char* hash_out);
+#include "repository.h"
+#include "file_utils.h"
+#include "objects.h"
 // Add file to staging area
 int add_file_to_index(const char* filepath) {
     // Check if file exists
