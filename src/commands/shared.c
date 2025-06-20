@@ -5,15 +5,6 @@
 #include <string.h>
 #include <errno.h>
 #include <openssl/sha.h>
-
-void simple_hash(const char* content, size_t size, char* hash_out) {
-    unsigned long hash = 5381;
-    for (size_t i = 0; i < size; i++) {
-        hash = ((hash << 5) + hash) + content[i];
-    }
-    snprintf(hash_out, 41, "%08lx%08lx%08lx%08lx%08lx",
-             hash, hash >> 8, hash >> 16, hash >> 24, (unsigned long)size);
-}
 int check_repo() {
     struct stat st;
     if (stat(".avc", &st) == -1) {
