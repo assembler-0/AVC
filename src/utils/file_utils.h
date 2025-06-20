@@ -5,5 +5,6 @@
 
 char* read_file(const char* filepath, size_t* size);
 int write_file(const char* filepath, const char* content, size_t size);
+char* strdup2(const char* s);
 
 #endif // FILE_UTILS_H

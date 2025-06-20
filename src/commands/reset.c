@@ -2,11 +2,41 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <libgen.h>
+#include <errno.h>
 #include "commands.h"
 #include "repository.h"
 #include "index.h"
 #include "objects.h"
 #include "file_utils.h"
+// Helper function to create directory recursively
+int create_directory_recursive(const char* path) {
+    char* path_copy = strdup2(path);
+    if (!path_copy) return -1;
+
+    char* dir = dirname(path_copy);
+    if (strcmp(dir, ".") == 0 || strcmp(dir, "/") == 0) {
+        free(path_copy);
+        return 0;
+    }
+
+    struct stat st;
+    if (stat(dir, &st) == -1) {
+        if (create_directory_recursive(dir) == -1) {
+            free(path_copy);
+            return -1;
+        }
+        if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
+            perror("mkdir");
+            free(path_copy);
+            return -1;
+        }
+    }
+
+    free(path_copy);
+    return 0;
+}
 
 // Reset working directory to match a commit
 int reset_to_commit(const char* commit_hash, int hard_reset) {
@@ -30,7 +60,15 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
 
     // Parse commit to get tree hash - look for "tree " at start of line
     char tree_hash[65] = {0};
-    char* line_start = commit_content;
+    char* content_copy = malloc(commit_size + 1);
+    if (!content_copy) {
+        free(commit_content);
+        return -1;
+    }
+    memcpy(content_copy, commit_content, commit_size);
+    content_copy[commit_size] = '\0';
+
+    char* line_start = content_copy;
     char* line_end;
 
     while ((line_end = strchr(line_start, '\n')) != NULL) {
@@ -40,11 +78,11 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
             tree_hash[64] = '\0';
             break;
         }
-        *line_end = '\n'; // Restore newline
         line_start = line_end + 1;
     }
 
     free(commit_content);
+    free(content_copy);
 
     if (strlen(tree_hash) != 64) {
         fprintf(stderr, "Invalid commit format - no tree hash found\n");
@@ -76,17 +114,19 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
         return -1;
     }
 
-    // Parse tree content line by line
-    char* content_copy = malloc(tree_size + 1);
-    if (!content_copy) {
+    // Parse tree content line by line - FIXED VERSION
+    char* tree_copy = malloc(tree_size + 1);
+    if (!tree_copy) {
         fprintf(stderr, "Memory allocation failed\n");
         free(tree_content);
         return -1;
     }
-    memcpy(content_copy, tree_content, tree_size);
-    content_copy[tree_size] = '\0';
+    memcpy(tree_copy, tree_content, tree_size);
+    tree_copy[tree_size] = '\0';
     free(tree_content);
+
     int files_processed = 0;
+    line_start = tree_copy;
 
     while ((line_end = strchr(line_start, '\n')) != NULL) {
         *line_end = '\0';
@@ -123,6 +163,14 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
             }
 
             if (hard_reset) {
+                // Create directory structure if needed
+                if (create_directory_recursive(filepath) == -1) {
+                    fprintf(stderr, "Failed to create directory structure for: %s\n", filepath);
+                    free(file_content);
+                    line_start = line_end + 1;
+                    continue;
+                }
+
                 // Write file to working directory
                 if (write_file(filepath, file_content, file_size) == -1) {
                     fprintf(stderr, "Failed to restore file: %s\n", filepath);
@@ -149,7 +197,7 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
         line_start = line_end + 1;
     }
 
-    free(content_copy);
+    free(tree_copy);
 
     printf("Processed %d files from tree\n", files_processed);
 
@@ -168,6 +216,19 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
 
                 snprintf(branch_path, sizeof(branch_path), ".avc/%s", branch_ref);
                 printf("Updating branch reference: %s\n", branch_path);
+
+                // Create refs/heads directory if it doesn't exist
+                char refs_heads_dir[512];
+                snprintf(refs_heads_dir, sizeof(refs_heads_dir), ".avc/refs/heads");
+                struct stat st;
+                if (stat(refs_heads_dir, &st) == -1) {
+                    if (mkdir(".avc/refs", 0755) == -1 && errno != EEXIST) {
+                        perror("mkdir .avc/refs");
+                    }
+                    if (mkdir(refs_heads_dir, 0755) == -1 && errno != EEXIST) {
+                        perror("mkdir .avc/refs/heads");
+                    }
+                }
 
                 FILE* branch_file = fopen(branch_path, "w");
                 if (branch_file) {
@@ -292,7 +353,15 @@ int cmd_reset(int argc, char* argv[]) {
             }
 
             // Look for parent line
-            char* line_start = commit_content;
+            char* content_copy = malloc(commit_size + 1);
+            if (!content_copy) {
+                free(commit_content);
+                return -1;
+            }
+            memcpy(content_copy, commit_content, commit_size);
+            content_copy[commit_size] = '\0';
+
+            char* line_start = content_copy;
             char* line_end;
             int parent_found = 0;
 
@@ -305,10 +374,10 @@ int cmd_reset(int argc, char* argv[]) {
                     printf("Found parent commit: %s\n", resolved_hash);
                     break;
                 }
-                *line_end = '\n';
                 line_start = line_end + 1;
             }
             free(commit_content);
+            free(content_copy);
 
             if (!parent_found) {
                 fprintf(stderr, "HEAD has no parent commit to reset to.\n");
