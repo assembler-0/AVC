@@ -149,36 +149,51 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
         return NULL;
     }
 
-    // Parse header to get type and content
-    char* null_pos = strchr(decompressed, '\0');
-    if (!null_pos) {
-        free(decompressed);
-        return NULL;
-    }
+    // --- START OF BUG FIX ---
+    // The original code was flawed in how it parsed the decompressed data.
+    // This new version correctly identifies the header and content.
 
-    // Parse header: "type size"
+    // Find the space that separates the object type from its size.
     char* space = strchr(decompressed, ' ');
     if (!space) {
         free(decompressed);
         return NULL;
     }
 
+    // Find the null-terminator that marks the end of the header ("type size\0").
+    // We use memchr because the buffer might contain other nulls in the content.
+    char* header_end = memchr(decompressed, '\0', try_size);
+    if (!header_end) {
+        free(decompressed);
+        return NULL;
+    }
+
+    // Extract the type (from the start of the buffer to the space).
     *space = '\0';
     strcpy(type_out, decompressed);
+
+    // Extract the size (from after the space). atoll handles the null terminator.
     size_t content_size = atoll(space + 1);
 
-    // Extract content
-    char* content_start = null_pos + 1;
+    // The content itself begins right after the header's null-terminator.
+    char* content_start = header_end + 1;
+
+    // Allocate a new buffer for just the content.
     char* content = malloc(content_size + 1);
     if (!content) {
         free(decompressed);
         return NULL;
     }
 
+    // Copy the content into the new buffer.
     memcpy(content, content_start, content_size);
     content[content_size] = '\0';
+
+    // Free the temporary buffer that held the full decompressed object.
     free(decompressed);
 
+    // Return the final values.
     *size_out = content_size;
     return content;
+    // --- END OF BUG FIX ---
 }

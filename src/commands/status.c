@@ -15,10 +15,18 @@ int cmd_status(int argc, char* argv[]) {
 
     printf("On branch main\n\n");
 
+    // FIX: Use stat on the filename to check if the index is empty. This is more portable than fileno().
+    struct stat st;
+    if (stat(".avc/index", &st) == -1 || st.st_size == 0) {
+        printf("No changes to be committed.\n");
+        return 0;
+    }
+
     // Read and display staged files
     FILE* index = fopen(".avc/index", "r");
     if (!index) {
-        printf("No files staged for commit.\n");
+        // This case should be covered by the stat check above, but it's good practice to keep it.
+        printf("No changes to be committed.\n");
         return 0;
     }
 
@@ -30,10 +38,10 @@ int cmd_status(int argc, char* argv[]) {
 
     while (fgets(line, sizeof(line), index)) {
         // Parse index line: hash filepath mode
-        char hash[41], filepath[256];
+        char hash[65], filepath[256];
         unsigned int mode;
 
-        if (sscanf(line, "%40s %255s %o", hash, filepath, &mode) == 3) {
+        if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
             printf("  \033[32mnew file:   %s\033[0m\n", filepath);
             has_staged = 1;
         }
@@ -42,7 +50,8 @@ int cmd_status(int argc, char* argv[]) {
     fclose(index);
 
     if (!has_staged) {
-        printf("No files staged for commit.\n");
+        // This could happen if the index file has malformed lines
+        printf("No changes to be committed.\n");
     }
 
     printf("\n");

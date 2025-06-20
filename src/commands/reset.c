@@ -121,61 +121,100 @@ int cmd_reset(int argc, char* argv[]) {
     }
 
     int hard_reset = 0;
-    char* commit_hash = NULL;
+    char* target_hash_str = NULL;
 
     // Parse arguments
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--hard") == 0) {
             hard_reset = 1;
         } else {
-            commit_hash = argv[i];
+            target_hash_str = argv[i];
         }
     }
 
-    if (!commit_hash) {
+    if (!target_hash_str) {
         fprintf(stderr, "Please specify a commit hash\n");
         return 1;
     }
 
-    // Handle special cases like HEAD~1
-    char resolved_hash[65];
-    if (strcmp(commit_hash, "HEAD") == 0 || strncmp(commit_hash, "HEAD~", 5) == 0) {
-        // For now, just use the current HEAD
-        FILE* head = fopen(".avc/HEAD", "r");
-        if (head) {
-            char head_content[256];
-            if (fgets(head_content, sizeof(head_content), head)) {
-                if (strncmp(head_content, "ref: ", 5) == 0) {
-                    // Read branch reference
-                    char branch_path[512];
-                    char* branch_ref = head_content + 5;
-                    branch_ref[strcspn(branch_ref, "\n")] = '\0';
+    char resolved_hash[65]; // SHA-256 hash (64 hex + null)
 
-                    snprintf(branch_path, sizeof(branch_path), ".avc/%s", branch_ref);
-                    FILE* branch_file = fopen(branch_path, "r");
-                    if (branch_file) {
-                        if (fgets(resolved_hash, sizeof(resolved_hash), branch_file)) {
-                            resolved_hash[strcspn(resolved_hash, "\n")] = '\0';
-                            commit_hash = resolved_hash;
-                        }
-                        fclose(branch_file);
-                    }
-                }
-            }
-            fclose(head);
+    // FIX: Properly handle HEAD and HEAD~1 resolution
+    if (strcmp(target_hash_str, "HEAD") == 0 || strcmp(target_hash_str, "HEAD~1") == 0) {
+        // Get the current commit hash from the current branch
+        FILE* head_file = fopen(".avc/HEAD", "r");
+        if (!head_file) { perror("Failed to open .avc/HEAD"); return 1; }
+
+        char head_content[256];
+        if (!fgets(head_content, sizeof(head_content), head_file)) {
+            fclose(head_file);
+            fprintf(stderr, "Failed to read .avc/HEAD\n");
+            return 1;
         }
+        fclose(head_file);
+
+        char current_commit_hash[65] = "";
+        if (strncmp(head_content, "ref: ", 5) == 0) {
+            char branch_path[512];
+            char* branch_ref = head_content + 5;
+            branch_ref[strcspn(branch_ref, "\n")] = '\0';
+            snprintf(branch_path, sizeof(branch_path), ".avc/%s", branch_ref);
+
+            FILE* branch_file = fopen(branch_path, "r");
+            if (branch_file) {
+                if (fgets(current_commit_hash, sizeof(current_commit_hash), branch_file)) {
+                    current_commit_hash[strcspn(current_commit_hash, "\n")] = '\0';
+                }
+                fclose(branch_file);
+            }
+        }
+
+        if (strlen(current_commit_hash) == 0) {
+            fprintf(stderr, "Could not resolve HEAD commit.\n");
+            return 1;
+        }
+
+        if (strcmp(target_hash_str, "HEAD") == 0) {
+            strncpy(resolved_hash, current_commit_hash, sizeof(resolved_hash) - 1);
+            resolved_hash[sizeof(resolved_hash) - 1] = '\0';
+        } else { // HEAD~1
+            size_t commit_size;
+            char commit_type[16];
+            char* commit_content = load_object(current_commit_hash, &commit_size, commit_type);
+            if (!commit_content || strcmp(commit_type, "commit") != 0) {
+                fprintf(stderr, "Failed to load HEAD commit object.\n");
+                if (commit_content) free(commit_content);
+                return 1;
+            }
+
+            char* line = strtok(commit_content, "\n");
+            int parent_found = 0;
+            while (line) {
+                if (sscanf(line, "parent %64s", resolved_hash) == 1) {
+                    parent_found = 1;
+                    break;
+                }
+                line = strtok(NULL, "\n");
+            }
+            free(commit_content);
+
+            if (!parent_found) {
+                fprintf(stderr, "HEAD has no parent commit to reset to.\n");
+                return 1;
+            }
+        }
+        target_hash_str = resolved_hash;
     }
 
-    // Validate commit hash length (should be 64 chars for SHA-256)
-    if (strlen(commit_hash) != 64) {
-        fprintf(stderr, "Invalid commit hash format (expected 64 characters, got %zu)\n", strlen(commit_hash));
+    if (strlen(target_hash_str) != 64) {
+        fprintf(stderr, "Invalid commit hash format (expected 64 characters, got %zu)\n", strlen(target_hash_str));
         fprintf(stderr, "Use 'avc log' to see available commit hashes\n");
         return 1;
     }
 
-    printf("Resetting to commit %s%s...\n", commit_hash, hard_reset ? " (hard)" : "");
+    printf("Resetting to commit %s%s...\n", target_hash_str, hard_reset ? " (hard)" : "");
 
-    if (reset_to_commit(commit_hash, hard_reset) == -1) {
+    if (reset_to_commit(target_hash_str, hard_reset) == -1) {
         return 1;
     }
 
