@@ -425,8 +425,8 @@ int cmd_reset(int argc, char* argv[]) {
     }
 
     if (clean_flag) {
-        printf("WARNING: This will delete ALL files and directories in the current directory except .avc, .git, and .idea.\n");
-        printf("Are you sure you want to continue? Type 'yes' to confirm: ");
+        printf("This will delete ALL files and directories except .avc, .git, and .idea.\n");
+        printf("Type 'yes' to confirm, or anything else to cancel: ");
         char answer[16];
         if (!fgets(answer, sizeof(answer), stdin)) {
             fprintf(stderr, "Failed to read input. Aborting.\n");

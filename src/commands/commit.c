@@ -164,7 +164,7 @@ int cmd_commit(int argc, char* argv[]) {
         strncpy(message, argv[2], sizeof(message) - 1);
         message[sizeof(message) - 1] = '\0';
     } else {
-        printf("Commit message: ");
+        printf("Enter a commit message (or use -m <msg>): ");
         if (!fgets(message, sizeof(message), stdin)) {
             fprintf(stderr, "Failed to read commit message\n");
             return 1;

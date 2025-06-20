@@ -162,7 +162,7 @@ int add_file_to_index(const char* filepath) {
 
     // Check if file is already staged with same content
     if (is_file_unchanged_in_index(filepath, hash)) {
-        printf("File '%s' already staged with same content\n", filepath);
+        printf("Already staged and unchanged: %s\n", filepath);
         free(content);
         return 0;
     }
@@ -182,7 +182,7 @@ int add_file_to_index(const char* filepath) {
     fprintf(index, "%s %s %o\n", hash, filepath, (unsigned int)st.st_mode);
     fclose(index);
 
-    printf("Added '%s' to staging area (hash: %.8s)\n", filepath, hash);
+    printf("Added to staging: %s\n", filepath);
 
     free(content);
     return 0;

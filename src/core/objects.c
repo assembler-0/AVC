@@ -114,13 +114,9 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     char obj_path[512];
     snprintf(obj_path, sizeof(obj_path), ".avc/objects/%.2s/%s", hash, hash + 2);
 
-    // Debug: print the path we're trying to load
-    printf("DEBUG: Loading object from path: %s\n", obj_path);
-
     // Read compressed object file
     FILE* obj_file = fopen(obj_path, "rb");
     if (!obj_file) {
-        printf("DEBUG: Failed to open object file: %s\n", obj_path);
         perror("fopen");
         return NULL;
     }
@@ -129,8 +125,6 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     fseek(obj_file, 0, SEEK_END);
     size_t compressed_size = ftell(obj_file);
     fseek(obj_file, 0, SEEK_SET);
-
-    printf("DEBUG: Compressed file size: %zu bytes\n", compressed_size);
 
     // Read compressed data
     char* compressed_data = malloc(compressed_size);
@@ -143,7 +137,6 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     fclose(obj_file);
 
     if (bytes_read != compressed_size) {
-        printf("DEBUG: Failed to read complete file\n");
         free(compressed_data);
         return NULL;
     }
@@ -154,8 +147,6 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     size_t actual_decompressed_size = 0;
 
     for (int attempts = 0; attempts < 64; attempts++) {
-        printf("DEBUG: Decompression attempt %d with buffer size %zu\n", attempts + 1, try_size);
-
         char* temp_buffer = malloc(try_size + 1);
         if (!temp_buffer) {
             break;
@@ -167,10 +158,8 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
         if (result == Z_OK) {
             decompressed = temp_buffer;
             actual_decompressed_size = dest_len;
-            printf("DEBUG: Decompression successful, actual size: %zu\n", actual_decompressed_size);
             break;
         } else {
-            printf("DEBUG: Decompression failed with error %d\n", result);
             free(temp_buffer);
             if (result == Z_BUF_ERROR) {
                 try_size *= 2; // Try larger buffer
@@ -183,7 +172,6 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
 
     free(compressed_data);
     if (!decompressed) {
-        printf("DEBUG: All decompression attempts failed\n");
         return NULL;
     }
 
@@ -193,14 +181,12 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     // Parse header: "type size\0content"
     char* space = strchr(decompressed, ' ');
     if (!space) {
-        printf("DEBUG: No space found in header\n");
         free(decompressed);
         return NULL;
     }
 
     char* null_pos = memchr(decompressed, '\0', actual_decompressed_size);
     if (!null_pos) {
-        printf("DEBUG: No null terminator found in header\n");
         free(decompressed);
         return NULL;
     }
@@ -208,22 +194,17 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     // Extract type
     *space = '\0';
     strcpy(type_out, decompressed);
-    printf("DEBUG: Object type: %s\n", type_out);
 
     // Extract size
     size_t declared_size = atoll(space + 1);
-    printf("DEBUG: Declared content size: %zu\n", declared_size);
 
     // Find content start (after the null terminator)
     char* content_start = null_pos + 1;
     size_t header_size = content_start - decompressed;
     size_t available_content_size = actual_decompressed_size - header_size;
 
-    printf("DEBUG: Header size: %zu, Available content: %zu\n", header_size, available_content_size);
-
     // Verify we have enough content
     if (available_content_size < declared_size) {
-        printf("DEBUG: Content size mismatch: declared %zu, available %zu\n", declared_size, available_content_size);
         free(decompressed);
         return NULL;
     }
@@ -242,6 +223,5 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     free(decompressed);
 
     *size_out = declared_size;
-    printf("DEBUG: Successfully loaded object, content size: %zu\n", declared_size);
     return content;
 }
