@@ -108,14 +108,20 @@ int store_object(const char* type, const char* content, size_t size, char* hash_
 }
 
 // Load object content
+// Fixed load_object function for objects.c
 char* load_object(const char* hash, size_t* size_out, char* type_out) {
     // Create object path
     char obj_path[512];
     snprintf(obj_path, sizeof(obj_path), ".avc/objects/%.2s/%s", hash, hash + 2);
 
+    // Debug: print the path we're trying to load
+    printf("DEBUG: Loading object from path: %s\n", obj_path);
+
     // Read compressed object file
     FILE* obj_file = fopen(obj_path, "rb");
     if (!obj_file) {
+        printf("DEBUG: Failed to open object file: %s\n", obj_path);
+        perror("fopen");
         return NULL;
     }
 
@@ -124,76 +130,118 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     size_t compressed_size = ftell(obj_file);
     fseek(obj_file, 0, SEEK_SET);
 
+    printf("DEBUG: Compressed file size: %zu bytes\n", compressed_size);
+
     // Read compressed data
     char* compressed_data = malloc(compressed_size);
     if (!compressed_data) {
         fclose(obj_file);
         return NULL;
     }
-    fread(compressed_data, 1, compressed_size, obj_file);
+
+    size_t bytes_read = fread(compressed_data, 1, compressed_size, obj_file);
     fclose(obj_file);
 
-    // We need to try decompression with increasing buffer sizes
-    // since we don't know the original size
+    if (bytes_read != compressed_size) {
+        printf("DEBUG: Failed to read complete file\n");
+        free(compressed_data);
+        return NULL;
+    }
+
+    // Try decompression with increasing buffer sizes
     size_t try_size = compressed_size * 4; // Start with 4x compressed size
     char* decompressed = NULL;
-    
-    for (int attempts = 0; attempts < 5; attempts++) {
-        decompressed = decompress_data(compressed_data, compressed_size, try_size);
-        if (decompressed) break;
-        try_size *= 2; // Double the buffer size and try again
+    size_t actual_decompressed_size = 0;
+
+    for (int attempts = 0; attempts < 8; attempts++) {
+        printf("DEBUG: Decompression attempt %d with buffer size %zu\n", attempts + 1, try_size);
+
+        char* temp_buffer = malloc(try_size + 1);
+        if (!temp_buffer) {
+            break;
+        }
+
+        uLongf dest_len = try_size;
+        int result = uncompress((Bytef*)temp_buffer, &dest_len, (const Bytef*)compressed_data, compressed_size);
+
+        if (result == Z_OK) {
+            decompressed = temp_buffer;
+            actual_decompressed_size = dest_len;
+            printf("DEBUG: Decompression successful, actual size: %zu\n", actual_decompressed_size);
+            break;
+        } else {
+            printf("DEBUG: Decompression failed with error %d\n", result);
+            free(temp_buffer);
+            if (result == Z_BUF_ERROR) {
+                try_size *= 2; // Try larger buffer
+                continue;
+            } else {
+                break; // Other errors are not recoverable by increasing buffer size
+            }
+        }
     }
-    
+
     free(compressed_data);
     if (!decompressed) {
+        printf("DEBUG: All decompression attempts failed\n");
         return NULL;
     }
 
-    // --- START OF BUG FIX ---
-    // The original code was flawed in how it parsed the decompressed data.
-    // This new version correctly identifies the header and content.
+    // Null-terminate the decompressed data
+    decompressed[actual_decompressed_size] = '\0';
 
-    // Find the space that separates the object type from its size.
+    // Parse header: "type size\0content"
     char* space = strchr(decompressed, ' ');
     if (!space) {
+        printf("DEBUG: No space found in header\n");
         free(decompressed);
         return NULL;
     }
 
-    // Find the null-terminator that marks the end of the header ("type size\0").
-    // We use memchr because the buffer might contain other nulls in the content.
-    char* header_end = memchr(decompressed, '\0', try_size);
-    if (!header_end) {
+    char* null_pos = memchr(decompressed, '\0', actual_decompressed_size);
+    if (!null_pos) {
+        printf("DEBUG: No null terminator found in header\n");
         free(decompressed);
         return NULL;
     }
 
-    // Extract the type (from the start of the buffer to the space).
+    // Extract type
     *space = '\0';
     strcpy(type_out, decompressed);
+    printf("DEBUG: Object type: %s\n", type_out);
 
-    // Extract the size (from after the space). atoll handles the null terminator.
-    size_t content_size = atoll(space + 1);
+    // Extract size
+    size_t declared_size = atoll(space + 1);
+    printf("DEBUG: Declared content size: %zu\n", declared_size);
 
-    // The content itself begins right after the header's null-terminator.
-    char* content_start = header_end + 1;
+    // Find content start (after the null terminator)
+    char* content_start = null_pos + 1;
+    size_t header_size = content_start - decompressed;
+    size_t available_content_size = actual_decompressed_size - header_size;
 
-    // Allocate a new buffer for just the content.
-    char* content = malloc(content_size + 1);
+    printf("DEBUG: Header size: %zu, Available content: %zu\n", header_size, available_content_size);
+
+    // Verify we have enough content
+    if (available_content_size < declared_size) {
+        printf("DEBUG: Content size mismatch: declared %zu, available %zu\n", declared_size, available_content_size);
+        free(decompressed);
+        return NULL;
+    }
+
+    // Allocate buffer for content only
+    char* content = malloc(declared_size + 1);
     if (!content) {
         free(decompressed);
         return NULL;
     }
 
-    // Copy the content into the new buffer.
-    memcpy(content, content_start, content_size);
-    content[content_size] = '\0';
+    // Copy content
+    memcpy(content, content_start, declared_size);
+    content[declared_size] = '\0';
 
-    // Free the temporary buffer that held the full decompressed object.
     free(decompressed);
 
-    // Return the final values.
-    *size_out = content_size;
+    *size_out = declared_size;
+    printf("DEBUG: Successfully loaded object, content size: %zu\n", declared_size);
     return content;
-    // --- END OF BUG FIX ---
 }
