@@ -29,8 +29,7 @@ endif()
 
 # Find required packages
 find_package(OpenSSL REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(ZLIB REQUIRED zlib)
+find_package(ZLIB REQUIRED)
 
 # Create a library for core functionality
 add_library(avc_core STATIC
