@@ -1,0 +1,38 @@
+diff --git a/src/core/index.h b/src/core/index.h
+index 0000000..1111111 100644
+--- a/src/core/index.h
++++ b/src/core/index.h
+@@
+-// Transactional index updates (load once, write once)
+-int index_load(void);
+-// TODO: extend with size, mtime in upcoming format v2
+-int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out);
+-int index_commit(void);
+-// Returns pointer to hash string for given path if present (internal buffer), else NULL
+-const char* index_get_hash(const char* filepath);
++/*
++ * New index line format (v2)
++ *   hash size mtime mode filepath\n
++ * Example:
++ *   e3b0c442... 0 1697950652 100644 path/to/file.txt
++ */
++
++int index_load(void);
++int index_upsert_entry(const char* filepath,
++                       const char* hash,
++                       size_t size,
++                       long long mtime,
++                       unsigned int mode,
++                       int* unchanged_out);
++
++typedef struct {
++    const char* hash;
++    size_t size;
++    long long mtime;
++    unsigned int mode;
++} IndexMeta;
++
++const IndexMeta* index_lookup(const char* filepath);
++
++int index_commit(void);
++const char* index_get_hash(const char* filepath);
