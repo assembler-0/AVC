@@ -65,6 +65,7 @@ int cmd_add(int argc, char* argv[]) {
     // Results arrays
     char (*hashes)[65] = calloc(file_count, 65);
     unsigned int* modes = calloc(file_count, sizeof(unsigned int));
+    int* changed = calloc(file_count, sizeof(int)); // Track which files are actually changed
 
     // Load index once so we can compare hashes
     if (index_load() == -1) {
@@ -77,26 +78,60 @@ int cmd_add(int argc, char* argv[]) {
     for (size_t i = 0; i < file_count; ++i) {
         struct stat st;
         if (stat(file_paths[i], &st) == -1) continue;
-        const char* old_hash = index_get_hash(file_paths[i]);
+        
+        // Normalize file path to match index format (add "./" prefix if not present)
+        char normalized_path[1024];
+        if (file_paths[i][0] == '/') {
+            // Absolute path, use as is
+            strcpy(normalized_path, file_paths[i]);
+        } else if (strncmp(file_paths[i], "./", 2) == 0) {
+            // Already has "./" prefix
+            strcpy(normalized_path, file_paths[i]);
+        } else {
+            // Add "./" prefix
+            snprintf(normalized_path, sizeof(normalized_path), "./%s", file_paths[i]);
+        }
+        
+        const char* old_hash = index_get_hash(normalized_path);
         if (old_hash) {
             char new_hash[65];
             sha256_file_hex(file_paths[i], new_hash);
             if (strcmp(old_hash, new_hash) == 0) {
-                // unchanged, reuse old hash
+                // unchanged, reuse old hash but mark as unchanged
                 strcpy(hashes[i], old_hash);
                 modes[i] = (unsigned int)st.st_mode;
+                changed[i] = 0; // Mark as unchanged
                 continue;
             }
         }
         store_blob_from_file(file_paths[i], hashes[i]);
         modes[i] = (unsigned int)st.st_mode;
+        changed[i] = 1; // Mark as changed
     }
 
-    // Batch updates
+    // Batch updates - only for changed files
+    int added_count = 0;
+    int unchanged_count = 0;
     for (size_t i = 0; i < file_count; ++i) {
-        int unchanged=0;
-        if (index_upsert_entry(file_paths[i], hashes[i], modes[i], &unchanged)==-1) {
-            fprintf(stderr, "Failed to update index for %s\n", file_paths[i]);
+        if (changed[i]) {
+            // Normalize file path for index operations
+            char normalized_path[1024];
+            if (file_paths[i][0] == '/') {
+                strcpy(normalized_path, file_paths[i]);
+            } else if (strncmp(file_paths[i], "./", 2) == 0) {
+                strcpy(normalized_path, file_paths[i]);
+            } else {
+                snprintf(normalized_path, sizeof(normalized_path), "./%s", file_paths[i]);
+            }
+            
+            int unchanged=0;
+            if (index_upsert_entry(normalized_path, hashes[i], modes[i], &unchanged)==-1) {
+                fprintf(stderr, "Failed to update index for %s\n", file_paths[i]);
+            } else {
+                added_count++;
+            }
+        } else {
+            unchanged_count++;
         }
     }
 
@@ -105,6 +140,7 @@ int cmd_add(int argc, char* argv[]) {
         fprintf(stderr, "Failed to write index\n");
         return 1;
     }
+    printf("Added %d files to staging area.\n", added_count);
     printf("Done.\n");
 
         // free memory
@@ -112,6 +148,7 @@ int cmd_add(int argc, char* argv[]) {
     free(file_paths);
     free(hashes);
     free(modes);
+    free(changed);
 
     return 0;
 }

@@ -243,10 +243,20 @@ int store_object(const char* type, const char* content, size_t size, char* hash_
 
 // Compute SHA-256 of a file quickly, output hex.
 int sha256_file_hex(const char* filepath, char hash_out[65]) {
-    FILE* fp = fopen(filepath, "rb");
-    if (!fp) return -1;
+    struct stat st;
+    if (stat(filepath, &st) == -1) return -1;
+    size_t size = st.st_size;
+
+    // Prepare header "blob <size>\0" (same as store_blob_from_file)
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "blob %zu", size);
+
     SHA256_CTX ctx;
     SHA256_Init(&ctx);
+    SHA256_Update(&ctx, header, header_len + 1); // include null terminator
+
+    FILE* fp = fopen(filepath, "rb");
+    if (!fp) return -1;
     unsigned char buf[8192];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {

@@ -13,6 +13,24 @@
 
 // ---------------- In-memory index (transactional) ----------------
 
+// Path helpers ----------------------------------------------------
+// canonical_path: returns a pointer inside the input string that skips an optional "./" prefix.
+static const char* canonical_path(const char* p) {
+    if (p && strncmp(p, "./", 2) == 0) {
+        return p + 2;
+    }
+    return p;
+}
+
+// paths_equal: compares two paths while ignoring an optional leading "./" in either operand.
+static int paths_equal(const char* a, const char* b) {
+    a = canonical_path(a);
+    b = canonical_path(b);
+    return a && b && strcmp(a, b) == 0;
+}
+
+// ---------------- In-memory index (transactional) ----------------
+
 typedef struct {
     char* hash;
     char* path;
@@ -28,7 +46,7 @@ static int idx_loaded = 0;   // 0 = on-disk mode; 1 = in-memory transactional mo
 const char* index_get_hash(const char* filepath) {
     if (!idx_loaded) return NULL;
     for (size_t i = 0; i < idx_count; ++i) {
-        if (strcmp(idx_entries[i].path, filepath) == 0) {
+        if (paths_equal(idx_entries[i].path, filepath)) {
             return idx_entries[i].hash;
         }
     }
@@ -65,7 +83,7 @@ int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned in
             char hash[65], indexed_filepath[256];
             unsigned int existing_mode;
             if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &existing_mode) == 3 &&
-                strcmp(indexed_filepath, filepath) == 0) {
+                paths_equal(indexed_filepath, filepath)) {
                 found = 1;
                 if (strcmp(hash, new_hash) == 0) {
                     // Unchanged – keep original line as-is and mark unchanged.
@@ -83,7 +101,7 @@ int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned in
 
     // If file changed or was not present, append the fresh entry.
     if (!found || (found && (!unchanged_out || *unchanged_out == 0))) {
-        fprintf(dst, "%s %s %o\n", new_hash, filepath, mode);
+        fprintf(dst, "%s %s %o\n", new_hash, canonical_path(filepath), mode);
     }
 
     fclose(dst);
@@ -116,7 +134,7 @@ int index_load(void) {
             if (!idx_entries) { fclose(f); return -1; }
         }
         idx_entries[idx_count].hash = strdup2(hash);
-        idx_entries[idx_count].path = strdup2(path);
+        idx_entries[idx_count].path = strdup2(canonical_path(path));
         idx_entries[idx_count].mode = mode;
         idx_count++;
     }
@@ -132,7 +150,7 @@ int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode
     }
     if (unchanged_out) *unchanged_out = 0;
     for (size_t i = 0; i < idx_count; ++i) {
-        if (strcmp(idx_entries[i].path, filepath) == 0) {
+        if (paths_equal(idx_entries[i].path, filepath)) {
             if (strcmp(idx_entries[i].hash, hash) == 0) {
                 if (unchanged_out) *unchanged_out = 1;
                 return 0; // nothing to do
@@ -151,7 +169,7 @@ int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode
         if (!idx_entries) return -1;
     }
     idx_entries[idx_count].hash = strdup2(hash);
-    idx_entries[idx_count].path = strdup2(filepath);
+    idx_entries[idx_count].path = strdup2(canonical_path(filepath));
     idx_entries[idx_count].mode = mode;
     idx_count++;
     return 0;
@@ -188,7 +206,7 @@ int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
         unsigned int mode;
 
         if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (strcmp(indexed_filepath, filepath) == 0) {
+            if (paths_equal(indexed_filepath, filepath)) {
                 fclose(index);
                 return (strcmp(hash, new_hash) == 0); // Return 1 if unchanged, 0 if changed
             }
@@ -228,7 +246,7 @@ int remove_file_from_index_if_exists(const char* filepath) {
 
         // Parse the line. If it matches the file we want to remove, skip it.
         if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3 &&
-            strcmp(indexed_filepath, filepath) == 0) {
+            paths_equal(indexed_filepath, filepath)) {
             found = 1;
             continue; // Skip this entry
         }
@@ -307,7 +325,7 @@ int is_file_in_index(const char* filepath) {
         unsigned int mode;
 
         if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (strcmp(indexed_filepath, filepath) == 0) {
+            if (paths_equal(indexed_filepath, filepath)) {
                 fclose(index);
                 return 1; // Found in index
             }
@@ -345,7 +363,7 @@ int remove_file_from_index(const char* filepath) {
 
         if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
             // Skip the file we want to remove
-            if (strcmp(indexed_filepath, filepath) == 0) {
+            if (paths_equal(indexed_filepath, filepath)) {
                 found = 1;
                 continue;
             }
