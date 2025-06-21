@@ -5,4 +5,4 @@
 #ifndef REPOSITORY_H
 #define REPOSITORY_H
 int check_repo();
-#endif REPOSITORY_H
+#endif

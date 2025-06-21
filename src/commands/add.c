@@ -17,6 +17,8 @@ static void collect_files(const char* path, char*** paths, size_t* count, size_t
     if (S_ISDIR(st.st_mode)) {
         DIR* d = opendir(path);
         if (!d) return;
+        // Skip internal .avc directory
+        if (strcmp(path, ".avc") == 0 || strstr(path, "/.avc") != NULL) { closedir(d); return; }
         struct dirent* e;
         while ((e = readdir(d))) {
             if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
@@ -59,37 +61,51 @@ int cmd_add(int argc, char* argv[]) {
         return 1;
     }
 
+    printf("Adding %zu files...\n", file_count);
     // Results arrays
     char (*hashes)[65] = calloc(file_count, 65);
     unsigned int* modes = calloc(file_count, sizeof(unsigned int));
+
+    // Load index once so we can compare hashes
+    if (index_load() == -1) {
+        fprintf(stderr, "Failed to load index\n");
+        return 1;
+    }
 
     // Parallel processing of blobs
     #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < file_count; ++i) {
         struct stat st;
         if (stat(file_paths[i], &st) == -1) continue;
+        const char* old_hash = index_get_hash(file_paths[i]);
+        if (old_hash) {
+            char new_hash[65];
+            sha256_file_hex(file_paths[i], new_hash);
+            if (strcmp(old_hash, new_hash) == 0) {
+                // unchanged, reuse old hash
+                strcpy(hashes[i], old_hash);
+                modes[i] = (unsigned int)st.st_mode;
+                continue;
+            }
+        }
         store_blob_from_file(file_paths[i], hashes[i]);
         modes[i] = (unsigned int)st.st_mode;
     }
 
-    // Load index once, batch updates
-    if (index_load() == -1) {
-        fprintf(stderr, "Failed to load index\n");
-        return 1;
-    }
-
+    // Batch updates
     for (size_t i = 0; i < file_count; ++i) {
         int unchanged=0;
         if (index_upsert_entry(file_paths[i], hashes[i], modes[i], &unchanged)==-1) {
             fprintf(stderr, "Failed to update index for %s\n", file_paths[i]);
         }
-        printf("%s: %s\n", unchanged?"Already staged and unchanged":"Added to staging", file_paths[i]);
     }
 
+    printf("Committing index...\n");
     if (index_commit() == -1) {
         fprintf(stderr, "Failed to write index\n");
         return 1;
     }
+    printf("Done.\n");
 
         // free memory
     for (size_t i=0;i<file_count;++i) free(file_paths[i]);

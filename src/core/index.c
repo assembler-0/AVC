@@ -24,6 +24,17 @@ static size_t idx_count = 0;
 static size_t idx_capacity = 0;
 static int idx_loaded = 0;   // 0 = on-disk mode; 1 = in-memory transactional mode
 
+// Public helper: return hash string for given path if present in loaded index, else NULL
+const char* index_get_hash(const char* filepath) {
+    if (!idx_loaded) return NULL;
+    for (size_t i = 0; i < idx_count; ++i) {
+        if (strcmp(idx_entries[i].path, filepath) == 0) {
+            return idx_entries[i].hash;
+        }
+    }
+    return NULL;
+}
+
 static void index_entries_free(void) {
     for (size_t i = 0; i < idx_count; ++i) {
         free(idx_entries[i].hash);
@@ -280,8 +291,6 @@ int add_file_to_index(const char* filepath) {
         fprintf(stderr, "Failed to update index for file: %s\n", filepath);
         return -1;
     }
-
-    printf("%s: %s\n", unchanged ? "Already staged and unchanged" : "Added to staging", filepath);
     return 0;
 }
 

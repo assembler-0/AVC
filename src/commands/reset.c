@@ -169,7 +169,6 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
 
         // Parse tree entry: "mode filepath hash"
         if (sscanf(line_start, "%o %511s %64s", &mode, filepath, file_hash) == 3) {
-            printf("Processing file: %s (hash: %.8s)\n", filepath, file_hash);
 
             // Load file content
             size_t file_size;
@@ -201,8 +200,6 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
                 // Write file to working directory
                 if (write_file(filepath, file_content, file_size) == -1) {
                     fprintf(stderr, "Failed to restore file: %s\n", filepath);
-                } else {
-                    printf("Restored: %s\n", filepath);
                 }
             }
 

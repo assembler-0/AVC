@@ -241,6 +241,25 @@ int store_object(const char* type, const char* content, size_t size, char* hash_
     return 0;
 }
 
+// Compute SHA-256 of a file quickly, output hex.
+int sha256_file_hex(const char* filepath, char hash_out[65]) {
+    FILE* fp = fopen(filepath, "rb");
+    if (!fp) return -1;
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    unsigned char buf[8192];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        SHA256_Update(&ctx, buf, n);
+    }
+    fclose(fp);
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    SHA256_Final(digest, &ctx);
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) sprintf(hash_out + i*2, "%02x", digest[i]);
+    hash_out[64] = '\0';
+    return 0;
+}
+
 // Load object content
 // Fixed load_object function for objects.c
 char* load_object(const char* hash, size_t* size_out, char* type_out) {

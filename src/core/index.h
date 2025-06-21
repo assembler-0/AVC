@@ -18,5 +18,7 @@ int clear_index(void);
 int index_load(void);
 int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out);
 int index_commit(void);
+// Returns pointer to hash string for given path if present (internal buffer), else NULL
+const char* index_get_hash(const char* filepath);
 
 #endif
