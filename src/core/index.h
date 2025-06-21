@@ -14,4 +14,9 @@ int remove_file_from_index(const char* filepath);
 int is_file_in_index(const char* filepath);
 int clear_index(void);
 
+// Transactional index updates (load once, write once)
+int index_load(void);
+int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out);
+int index_commit(void);
+
 #endif

@@ -11,34 +11,31 @@
 #include "file_utils.h"
 #include <dirent.h>
 
-// Check if file is already in index with same hash
-int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        return 0; // No index, file not staged
-    }
+// ---------------- In-memory index (transactional) ----------------
 
-    char line[1024];
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], indexed_filepath[256]; // 64 chars + null terminator
-        unsigned int mode;
+typedef struct {
+    char* hash;
+    char* path;
+    unsigned int mode;
+} IndexEntry;
 
-        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (strcmp(indexed_filepath, filepath) == 0) {
-                fclose(index);
-                return (strcmp(hash, new_hash) == 0); // Return 1 if unchanged, 0 if changed
-            }
-        }
+static IndexEntry* idx_entries = NULL;
+static size_t idx_count = 0;
+static size_t idx_capacity = 0;
+static int idx_loaded = 0;   // 0 = on-disk mode; 1 = in-memory transactional mode
+
+static void index_entries_free(void) {
+    for (size_t i = 0; i < idx_count; ++i) {
+        free(idx_entries[i].hash);
+        free(idx_entries[i].path);
     }
-    fclose(index);
-    return 0; // Not found in index
+    free(idx_entries);
+    idx_entries = NULL;
+    idx_count = 0;
+    idx_capacity = 0;
 }
 
-// Upsert file in index: 
-//  - If an entry for `filepath` exists with identical hash, return 1 (unchanged)
-//  - Otherwise rewrite the index to contain the new (hash, mode) entry and return 0 (added/updated)
-//  - On error return -1
-static int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned int mode, int* unchanged_out) {
+int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned int mode, int* unchanged_out) {
     if (unchanged_out) *unchanged_out = 0;
 
     // Open existing index (it may not exist yet)
@@ -88,6 +85,113 @@ static int upsert_file_in_index(const char* filepath, const char* new_hash, unsi
 
     return 0;
 }
+
+int index_load(void) {
+    if (idx_loaded) return 0; // already
+    FILE* f = fopen(".avc/index", "r");
+    if (!f) {
+        // treat missing file as empty index
+        idx_loaded = 1;
+        return 0;
+    }
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        char hash[65], path[256];
+        unsigned int mode;
+        if (sscanf(line, "%64s %255s %o", hash, path, &mode) != 3) continue;
+        if (idx_count >= idx_capacity) {
+            idx_capacity = idx_capacity ? idx_capacity * 2 : 32;
+            idx_entries = realloc(idx_entries, idx_capacity * sizeof(IndexEntry));
+            if (!idx_entries) { fclose(f); return -1; }
+        }
+        idx_entries[idx_count].hash = strdup2(hash);
+        idx_entries[idx_count].path = strdup2(path);
+        idx_entries[idx_count].mode = mode;
+        idx_count++;
+    }
+    fclose(f);
+    idx_loaded = 1;
+    return 0;
+}
+
+int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out) {
+    if (!idx_loaded) {
+        // fall back to streaming update if not loaded
+        return upsert_file_in_index(filepath, hash, mode, unchanged_out);
+    }
+    if (unchanged_out) *unchanged_out = 0;
+    for (size_t i = 0; i < idx_count; ++i) {
+        if (strcmp(idx_entries[i].path, filepath) == 0) {
+            if (strcmp(idx_entries[i].hash, hash) == 0) {
+                if (unchanged_out) *unchanged_out = 1;
+                return 0; // nothing to do
+            }
+            // update existing entry
+            free(idx_entries[i].hash);
+            idx_entries[i].hash = strdup2(hash);
+            idx_entries[i].mode = mode;
+            return 0;
+        }
+    }
+    // append new entry
+    if (idx_count >= idx_capacity) {
+        idx_capacity = idx_capacity ? idx_capacity * 2 : 32;
+        idx_entries = realloc(idx_entries, idx_capacity * sizeof(IndexEntry));
+        if (!idx_entries) return -1;
+    }
+    idx_entries[idx_count].hash = strdup2(hash);
+    idx_entries[idx_count].path = strdup2(filepath);
+    idx_entries[idx_count].mode = mode;
+    idx_count++;
+    return 0;
+}
+
+int index_commit(void) {
+    if (!idx_loaded) return 0; // nothing
+    FILE* f = fopen(".avc/index.tmp", "w");
+    if (!f) return -1;
+    for (size_t i = 0; i < idx_count; ++i) {
+        fprintf(f, "%s %s %o\n", idx_entries[i].hash, idx_entries[i].path, idx_entries[i].mode);
+    }
+    fclose(f);
+    if (rename(".avc/index.tmp", ".avc/index") != 0) {
+        remove(".avc/index.tmp");
+        return -1;
+    }
+    index_entries_free();
+    idx_loaded = 0;
+    return 0;
+}
+
+
+// Check if file is already in index with same hash
+int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
+    FILE* index = fopen(".avc/index", "r");
+    if (!index) {
+        return 0; // No index, file not staged
+    }
+
+    char line[1024];
+    while (fgets(line, sizeof(line), index)) {
+        char hash[65], indexed_filepath[256]; // 64 chars + null terminator
+        unsigned int mode;
+
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
+            if (strcmp(indexed_filepath, filepath) == 0) {
+                fclose(index);
+                return (strcmp(hash, new_hash) == 0); // Return 1 if unchanged, 0 if changed
+            }
+        }
+    }
+    fclose(index);
+    return 0; // Not found in index
+}
+
+// Upsert file in index: 
+//  - If an entry for `filepath` exists with identical hash, return 1 (unchanged)
+//  - Otherwise rewrite the index to contain the new (hash, mode) entry and return 0 (added/updated)
+//  - On error return -1
+
 
 // Remove file from index (legacy helper kept for other commands)
 int remove_file_from_index_if_exists(const char* filepath) {
@@ -188,7 +292,7 @@ int add_file_to_index(const char* filepath) {
     }
 
     int unchanged = 0;
-    if (upsert_file_in_index(filepath, hash, (unsigned int)st.st_mode, &unchanged) == -1) {
+    if (index_upsert_entry(filepath, hash, (unsigned int)st.st_mode, &unchanged) == -1) {
         free(content);
         fprintf(stderr, "Failed to update index for file: %s\n", filepath);
         return -1;
