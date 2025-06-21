@@ -34,83 +34,103 @@ int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
     return 0; // Not found in index
 }
 
-// Remove file from index (if it exists)
-int remove_file_from_index_if_exists(const char* filepath) {
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        return 0; // No index file
-    }
+// Upsert file in index: 
+//  - If an entry for `filepath` exists with identical hash, return 1 (unchanged)
+//  - Otherwise rewrite the index to contain the new (hash, mode) entry and return 0 (added/updated)
+//  - On error return -1
+static int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned int mode, int* unchanged_out) {
+    if (unchanged_out) *unchanged_out = 0;
 
-    // Read all lines except the one we want to remove
-    char** lines = NULL;
-    size_t line_count = 0;
-    size_t capacity = 10;
-    lines = malloc(capacity * sizeof(char*));
-    if (!lines) {
-        fclose(index);
+    // Open existing index (it may not exist yet)
+    FILE* src = fopen(".avc/index", "r");
+    FILE* dst = fopen(".avc/index.tmp", "w");
+    if (!dst) {
+        if (src) fclose(src);
         return -1;
     }
 
     char line[1024];
     int found = 0;
 
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], indexed_filepath[256];
-        unsigned int mode;
-
-        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (strcmp(indexed_filepath, filepath) == 0) {
+    if (src) {
+        while (fgets(line, sizeof(line), src)) {
+            char hash[65], indexed_filepath[256];
+            unsigned int existing_mode;
+            if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &existing_mode) == 3 &&
+                strcmp(indexed_filepath, filepath) == 0) {
                 found = 1;
-                continue; // Skip this line
-            }
-        }
-
-        // Grow array if needed
-        if (line_count >= capacity) {
-            capacity *= 2;
-            char** new_lines = realloc(lines, capacity * sizeof(char*));
-            if (!new_lines) {
-                for (size_t i = 0; i < line_count; i++) {
-                    free(lines[i]);
+                if (strcmp(hash, new_hash) == 0) {
+                    // Unchanged – keep original line as-is and mark unchanged.
+                    if (unchanged_out) *unchanged_out = 1;
+                    fputs(line, dst);
                 }
-                free(lines);
-                fclose(index);
-                return -1;
+                // If content changed we simply skip the old line (it will be replaced later)
+                continue;
             }
-            lines = new_lines;
+            // Preserve all unrelated entries.
+            fputs(line, dst);
         }
-
-        // Store the line
-        lines[line_count] = malloc(strlen(line) + 1);
-        if (!lines[line_count]) {
-            for (size_t i = 0; i < line_count; i++) {
-                free(lines[i]);
-            }
-            free(lines);
-            fclose(index);
-            return -1;
-        }
-        strcpy(lines[line_count], line);
-        line_count++;
+        fclose(src);
     }
-    fclose(index);
 
-    // Rewrite index
-    index = fopen(".avc/index", "w");
-    if (!index) {
-        for (size_t i = 0; i < line_count; i++) {
-            free(lines[i]);
-        }
-        free(lines);
+    // If file changed or was not present, append the fresh entry.
+    if (!found || (found && (!unchanged_out || *unchanged_out == 0))) {
+        fprintf(dst, "%s %s %o\n", new_hash, filepath, mode);
+    }
+
+    fclose(dst);
+
+    // Atomically replace index.
+    if (rename(".avc/index.tmp", ".avc/index") != 0) {
+        remove(".avc/index.tmp");
         return -1;
     }
 
-    for (size_t i = 0; i < line_count; i++) {
-        fputs(lines[i], index);
-        free(lines[i]);
+    return 0;
+}
+
+// Remove file from index (legacy helper kept for other commands)
+int remove_file_from_index_if_exists(const char* filepath) {
+    // Open the existing index for reading. If it doesn't exist, nothing to do.
+    FILE* src = fopen(".avc/index", "r");
+    if (!src) {
+        return 0;
     }
-    free(lines);
-    fclose(index);
+
+    // Open a temporary file that will hold the rewritten index.
+    FILE* dst = fopen(".avc/index.tmp", "w");
+    if (!dst) {
+        fclose(src);
+        return -1;
+    }
+
+    char line[1024];
+    int found = 0;
+
+    while (fgets(line, sizeof(line), src)) {
+        char hash[65], indexed_filepath[256];
+        unsigned int mode;
+
+        // Parse the line. If it matches the file we want to remove, skip it.
+        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3 &&
+            strcmp(indexed_filepath, filepath) == 0) {
+            found = 1;
+            continue; // Skip this entry
+        }
+
+        // Otherwise, write the line unchanged.
+        fputs(line, dst);
+    }
+
+    fclose(src);
+    fclose(dst);
+
+    // Atomically replace the old index with the new one.
+    if (rename(".avc/index.tmp", ".avc/index") != 0) {
+        // If the rename failed, clean up the temporary file and report an error.
+        remove(".avc/index.tmp");
+        return -1;
+    }
 
     return found;
 }
@@ -167,22 +187,18 @@ int add_file_to_index(const char* filepath) {
         return 0;
     }
 
-    // Remove file from index if it already exists (to update it)
-    remove_file_from_index_if_exists(filepath);
-
-    // Add entry to index
-    FILE* index = fopen(".avc/index", "a");
-    if (!index) {
+    int unchanged = 0;
+    if (upsert_file_in_index(filepath, hash, (unsigned int)st.st_mode, &unchanged) == -1) {
         free(content);
-        perror("Failed to open index");
+        fprintf(stderr, "Failed to update index for file: %s\n", filepath);
         return -1;
     }
 
-    // Write index entry: hash filepath mode
-    fprintf(index, "%s %s %o\n", hash, filepath, (unsigned int)st.st_mode);
-    fclose(index);
-
-    printf("Added to staging: %s\n", filepath);
+    if (unchanged) {
+        printf("Already staged and unchanged: %s\n", filepath);
+    } else {
+        printf("Added to staging: %s\n", filepath);
+    }
 
     free(content);
     return 0;
