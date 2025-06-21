@@ -1,15 +1,30 @@
-//
+#define _XOPEN_SOURCE 700
 // Created by Atheria on 6/20/25.
 //
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <zlib.h>
 #include "hash.h"
 #include "objects.h"
-
+#include <openssl/sha.h>
+static int flush_to_file(z_stream* zs, FILE* fp, unsigned char* buf, int flush_mode) {
+    int ret;
+    do {
+        zs->avail_out = 8192;
+        zs->next_out = buf;
+        ret = deflate(zs, flush_mode);
+        size_t have = 8192 - zs->avail_out;
+        if (have && fwrite(buf, 1, have, fp) != have) {
+            ret = Z_ERRNO;
+        }
+    } while (zs->avail_out == 0);
+    return ret;
+}
 // Compress data using zlib
 char* compress_data(const char* data, size_t size, size_t* compressed_size) {
     uLongf dest_len = compressBound(size);
@@ -42,6 +57,125 @@ char* decompress_data(const char* compressed_data, size_t compressed_size, size_
     
     decompressed[dest_len] = '\0';
     return decompressed;
+}
+
+// Stream a file into a compressed blob object while computing its SHA-256.
+int store_blob_from_file(const char* filepath, char* hash_out) {
+    struct stat st;
+    if (stat(filepath, &st) == -1) {
+        perror("stat");
+        return -1;
+    }
+    size_t size = st.st_size;
+
+    // Prepare header "blob <size>\0"
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "blob %zu", size);
+
+    // Set up SHA-256 context
+    SHA256_CTX sha_ctx;
+    SHA256_Init(&sha_ctx);
+    SHA256_Update(&sha_ctx, header, header_len + 1); // include null terminator
+
+    // Prepare temp file inside .avc/objects for compressed data
+    if (mkdir(".avc/objects/tmp", 0755) == -1 && errno != EEXIST) {
+        perror("mkdir");
+        return -1;
+    }
+    char tmp_template[] = ".avc/objects/tmp/objXXXXXX";
+    int tmp_fd = mkstemp(tmp_template);
+    if (tmp_fd == -1) {
+        perror("mkstemp");
+        return -1;
+    }
+    FILE* tmp_fp = fdopen(tmp_fd, "wb");
+    if (!tmp_fp) {
+        close(tmp_fd);
+        perror("fdopen");
+        return -1;
+    }
+
+    // Initialize zlib stream for compression
+    z_stream strm;
+    memset(&strm, 0, sizeof(strm));
+    if (deflateInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
+        fclose(tmp_fp);
+        remove(tmp_template);
+        return -1;
+    }
+
+    // Buffer for compressed output
+    unsigned char out_buf[8192];
+
+    // Helper to drain zlib output into file
+
+
+    // Feed header (with null terminator) to compressor
+    strm.avail_in = header_len + 1;
+    strm.next_in = (unsigned char*)header;
+    if (flush_to_file(&strm, tmp_fp, out_buf, Z_NO_FLUSH) != Z_OK) {
+        deflateEnd(&strm); fclose(tmp_fp); remove(tmp_template); return -1;
+    }
+
+    // Open the source file
+    FILE* src = fopen(filepath, "rb");
+    if (!src) {
+        perror("fopen");
+        deflateEnd(&strm); fclose(tmp_fp); remove(tmp_template); return -1;
+    }
+
+    unsigned char in_buf[8192];
+    size_t read_bytes;
+    while ((read_bytes = fread(in_buf, 1, sizeof(in_buf), src)) > 0) {
+        SHA256_Update(&sha_ctx, in_buf, read_bytes);
+        strm.avail_in = read_bytes;
+        strm.next_in = in_buf;
+        if (flush_to_file(&strm, tmp_fp, out_buf, Z_NO_FLUSH) != Z_OK) {
+            fclose(src); deflateEnd(&strm); fclose(tmp_fp); remove(tmp_template); return -1;
+        }
+    }
+    fclose(src);
+
+    // Finish compression
+    if (flush_to_file(&strm, tmp_fp, out_buf, Z_FINISH) != Z_STREAM_END) {
+        deflateEnd(&strm); fclose(tmp_fp); remove(tmp_template); return -1;
+    }
+    deflateEnd(&strm);
+    fflush(tmp_fp);
+    fclose(tmp_fp);
+
+    // Finalize hash
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    SHA256_Final(digest, &sha_ctx);
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        sprintf(hash_out + i * 2, "%02x", digest[i]);
+    }
+    hash_out[64] = '\0';
+
+    // Determine final object path (.avc/objects/ab/cd...)
+    char obj_dir[512], obj_path[512];
+    snprintf(obj_dir, sizeof(obj_dir), ".avc/objects/%.2s", hash_out);
+    snprintf(obj_path, sizeof(obj_path), "%s/%s", obj_dir, hash_out + 2);
+
+    struct stat st_dir;
+    if (stat(obj_dir, &st_dir) == -1) {
+        if (mkdir(obj_dir, 0755) == -1 && errno != EEXIST) {
+            perror("mkdir"); remove(tmp_template); return -1;
+        }
+    }
+
+    // If object already exists, delete temp and return
+    if (access(obj_path, F_OK) == 0) {
+        remove(tmp_template);
+        return 0;
+    }
+
+    // Move temp file into final place
+    if (rename(tmp_template, obj_path) != 0) {
+        perror("rename"); remove(tmp_template); return -1;
+    }
+
+    return 0;
 }
 
 int store_object(const char* type, const char* content, size_t size, char* hash_out) {

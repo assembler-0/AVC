@@ -269,42 +269,19 @@ int add_file_to_index(const char* filepath) {
         return result;
     }
 
-    // Read file content
-    size_t size;
-    char* content = read_file(filepath, &size);
-    if (!content) {
-        fprintf(stderr, "Failed to read file: %s\n", filepath);
-        return -1;
-    }
-
     char hash[65]; // 64 chars + null terminator for SHA-256
-    if (store_object("blob", content, size, hash) == -1) {
-        free(content);
+    if (store_blob_from_file(filepath, hash) == -1) {
         fprintf(stderr, "Failed to store object for file: %s\n", filepath);
         return -1;
     }
 
-    // Check if file is already staged with same content
-    if (is_file_unchanged_in_index(filepath, hash)) {
-        printf("Already staged and unchanged: %s\n", filepath);
-        free(content);
-        return 0;
-    }
-
     int unchanged = 0;
     if (index_upsert_entry(filepath, hash, (unsigned int)st.st_mode, &unchanged) == -1) {
-        free(content);
         fprintf(stderr, "Failed to update index for file: %s\n", filepath);
         return -1;
     }
 
-    if (unchanged) {
-        printf("Already staged and unchanged: %s\n", filepath);
-    } else {
-        printf("Added to staging: %s\n", filepath);
-    }
-
-    free(content);
+    printf("%s: %s\n", unchanged ? "Already staged and unchanged" : "Added to staging", filepath);
     return 0;
 }
 
