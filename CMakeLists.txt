@@ -30,6 +30,7 @@ endif()
 # Find required packages
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # Create a library for core functionality
 add_library(avc_core STATIC
@@ -65,6 +66,7 @@ target_link_libraries(avc_core PUBLIC
         OpenSSL::SSL
         OpenSSL::Crypto
         ${ZLIB_LIBRARIES}
+        OpenMP::OpenMP_C
 )
 
 target_compile_definitions(avc_core PRIVATE
