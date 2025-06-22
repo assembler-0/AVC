@@ -124,9 +124,9 @@ int cmd_add(int argc, char* argv[]) {
                 snprintf(normalized_path, sizeof(normalized_path), "./%s", file_paths[i]);
             }
             
-            int unchanged=0;
+        int unchanged=0;
             if (index_upsert_entry(normalized_path, hashes[i], modes[i], &unchanged)==-1) {
-                fprintf(stderr, "Failed to update index for %s\n", file_paths[i]);
+            fprintf(stderr, "Failed to update index for %s\n", file_paths[i]);
             } else {
                 added_count++;
             }

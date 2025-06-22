@@ -176,7 +176,7 @@ int cmd_status(int argc, char* argv[]) {
             if (file_in_tree_with_hash(last_tree_hash, filepath, hash)) {
                 printf("  \033[33mmodified:   %s\033[0m\n", filepath);
             } else {
-                printf("  \033[32mnew file:   %s\033[0m\n", filepath);
+            printf("  \033[32mnew file:   %s\033[0m\n", filepath);
             }
             has_staged = 1;
         }

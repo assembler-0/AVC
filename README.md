@@ -59,9 +59,9 @@ git clone https://github.com/assembler-0/AVC.git
 cd AVC-ArchiveVersionControl
 
 # Build the project
-mkdir build && cd build
-cmake ..
-make
+   mkdir build && cd build
+   cmake ..
+   make
 
 # Optional: Install system-wide
 sudo make install
