@@ -173,8 +173,11 @@ int cmd_log(int argc, char* argv[]) {
             if (strncmp(line, "parent ", 7) == 0) {
                 parent_hash = malloc(65);
                 if (parent_hash) {
+                    // Copy the hash and ensure we strip any trailing newline or whitespace
                     strncpy(parent_hash, line + 7, 64);
                     parent_hash[64] = '\0';
+                    // Remove any trailing newline that might have been copied
+                    parent_hash[strcspn(parent_hash, "\n")] = '\0';
                 }
                 break;
             }

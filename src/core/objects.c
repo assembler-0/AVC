@@ -409,8 +409,8 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
         return NULL;
     }
 
-    // Try decompression with increasing buffer sizes
-    size_t try_size = compressed_size * 4; // Start with 4x compressed size
+    // First try to decompress; if it is not compressed we will fall back.
+    size_t try_size = compressed_size * 4; // initial guess
     char* decompressed = NULL;
     size_t actual_decompressed_size = 0;
 
@@ -419,10 +419,8 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
         if (!temp_buffer) {
             break;
         }
-
         uLongf dest_len = try_size;
         int result = uncompress((Bytef*)temp_buffer, &dest_len, (const Bytef*)compressed_data, compressed_size);
-
         if (result == Z_OK) {
             decompressed = temp_buffer;
             actual_decompressed_size = dest_len;
@@ -430,15 +428,21 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
         } else {
             free(temp_buffer);
             if (result == Z_BUF_ERROR) {
-                try_size *= 2; // Try larger buffer
+                try_size *= 2; // need a bigger buffer, keep trying
                 continue;
+            } else if (result == Z_DATA_ERROR) {
+                // Data was NOT compressed – treat original bytes as the object
+                decompressed = compressed_data;
+                actual_decompressed_size = compressed_size;
+                compressed_data = NULL; // ownership transferred
+                break;
             } else {
-                break; // Other errors are not recoverable by increasing buffer size
+                break; // unrecoverable
             }
         }
     }
 
-    free(compressed_data);
+    if (compressed_data) free(compressed_data);
     if (!decompressed) {
         return NULL;
     }
