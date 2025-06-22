@@ -21,7 +21,7 @@ static void collect_files(const char* path, char*** paths, size_t* count, size_t
         if (strcmp(path, ".avc") == 0 || strstr(path, "/.avc") != NULL) { closedir(d); return; }
         struct dirent* e;
         while ((e = readdir(d))) {
-            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
+            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0 || strcmp(e->d_name, ".avc") == 0) continue;
             char child[1024];
             snprintf(child, sizeof(child), "%s/%s", path, e->d_name);
             collect_files(child, paths, count, cap);
