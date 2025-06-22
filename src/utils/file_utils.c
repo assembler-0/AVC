@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <errno.h>
+#include <dirent.h>
+#include <unistd.h>
 
 char* strdup2(const char* s) {
     if (!s) return NULL;
@@ -109,6 +111,47 @@ int write_file(const char* filepath, const char* content, size_t size) {
     if (written != size) {
         fprintf(stderr, "Failed to write complete content to file: %s\n", filepath);
         return -1;
+    }
+
+    return 0;
+}
+
+// Recursively remove directory and its contents
+int remove_directory_recursive(const char* path) {
+    struct stat st;
+    if (stat(path, &st) == -1) {
+        return -1;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        DIR* d = opendir(path);
+        if (!d) {
+            return -1;
+        }
+
+        struct dirent* e;
+        while ((e = readdir(d))) {
+            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) {
+                continue;
+            }
+
+            char child_path[1024];
+            snprintf(child_path, sizeof(child_path), "%s/%s", path, e->d_name);
+            
+            if (remove_directory_recursive(child_path) == -1) {
+                closedir(d);
+                return -1;
+            }
+        }
+        closedir(d);
+
+        if (rmdir(path) == -1) {
+            return -1;
+        }
+    } else {
+        if (unlink(path) == -1) {
+            return -1;
+        }
     }
 
     return 0;
