@@ -41,6 +41,7 @@ add_library(avc_core STATIC
 
         # Utilities
         src/utils/file_utils.c
+        src/utils/arg_parser.c
 
         # Commands
         src/commands/add.c

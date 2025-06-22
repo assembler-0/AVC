@@ -12,6 +12,7 @@
 #include "index.h"
 #include "objects.h"
 #include "file_utils.h"
+#include "arg_parser.h"
 // Helper function to create directory recursively
 int create_directory_recursive(const char* path) {
     char* path_copy = strdup2(path);
@@ -284,32 +285,30 @@ int cmd_reset(int argc, char* argv[]) {
         return 1;
     }
 
-    if (argc < 2) {
+    // Parse arguments using the unified parser
+    parsed_args_t* args = parse_args(argc, argv, "hl"); // h=hard, l=clean
+    if (!args) {
+        return 1;
+    }
+
+    if (get_positional_count(args) == 0) {
         fprintf(stderr, "Usage: avc reset [--hard] [--clean] <commit-hash>\n");
         fprintf(stderr, "  --hard: Reset working directory and index\n");
         fprintf(stderr, "  --clean: Wipe working directory (except .avc, .git, .idea) before restoring\n");
         fprintf(stderr, "  (default): Reset only index, keep working directory\n");
         fprintf(stderr, "  You can also use: avc reset [--hard] [--clean] HEAD~1  (previous commit)\n");
+        free_parsed_args(args);
         return 1;
     }
 
-    int hard_reset = 0;
-    int clean_flag = 0;
-    char* target_hash_str = NULL;
-
-    // Parse arguments
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--hard") == 0) {
-            hard_reset = 1;
-        } else if (strcmp(argv[i], "--clean") == 0) {
-            clean_flag = 1;
-        } else {
-            target_hash_str = argv[i];
-        }
-    }
+    int hard_reset = has_flag(args, FLAG_HARD);
+    int clean_flag = has_flag(args, FLAG_CLEAN);
+    char** positional = get_positional_args(args);
+    char* target_hash_str = positional[0]; // First positional argument
 
     if (!target_hash_str) {
         fprintf(stderr, "Please specify a commit hash\n");
+        free_parsed_args(args);
         return 1;
     }
 
@@ -321,6 +320,7 @@ int cmd_reset(int argc, char* argv[]) {
         FILE* head_file = fopen(".avc/HEAD", "r");
         if (!head_file) {
             perror("Failed to open .avc/HEAD");
+            free_parsed_args(args);
             return 1;
         }
 
@@ -328,6 +328,7 @@ int cmd_reset(int argc, char* argv[]) {
         if (!fgets(head_content, sizeof(head_content), head_file)) {
             fclose(head_file);
             fprintf(stderr, "Failed to read .avc/HEAD\n");
+            free_parsed_args(args);
             return 1;
         }
         fclose(head_file);
@@ -352,6 +353,7 @@ int cmd_reset(int argc, char* argv[]) {
             } else {
                 fprintf(stderr, "Failed to read branch file: %s\n", branch_path);
                 perror("fopen");
+                free_parsed_args(args);
                 return 1;
             }
         } else {
@@ -362,6 +364,7 @@ int cmd_reset(int argc, char* argv[]) {
 
         if (strlen(current_commit_hash) == 0) {
             fprintf(stderr, "Could not resolve HEAD commit.\n");
+            free_parsed_args(args);
             return 1;
         }
 
@@ -377,6 +380,7 @@ int cmd_reset(int argc, char* argv[]) {
             if (!commit_content || strcmp(commit_type, "commit") != 0) {
                 fprintf(stderr, "Failed to load HEAD commit object.\n");
                 if (commit_content) free(commit_content);
+                free_parsed_args(args);
                 return 1;
             }
 
@@ -384,6 +388,7 @@ int cmd_reset(int argc, char* argv[]) {
             char* content_copy = malloc(commit_size + 1);
             if (!content_copy) {
                 free(commit_content);
+                free_parsed_args(args);
                 return -1;
             }
             memcpy(content_copy, commit_content, commit_size);
@@ -409,6 +414,7 @@ int cmd_reset(int argc, char* argv[]) {
 
             if (!parent_found) {
                 fprintf(stderr, "HEAD has no parent commit to reset to.\n");
+                free_parsed_args(args);
                 return 1;
             }
         }
@@ -418,6 +424,7 @@ int cmd_reset(int argc, char* argv[]) {
     if (strlen(target_hash_str) != 64) {
         fprintf(stderr, "Invalid commit hash format (expected 64 characters, got %zu)\n", strlen(target_hash_str));
         fprintf(stderr, "Use 'avc log' to see available commit hashes\n");
+        free_parsed_args(args);
         return 1;
     }
 
@@ -427,15 +434,18 @@ int cmd_reset(int argc, char* argv[]) {
         char answer[16];
         if (!fgets(answer, sizeof(answer), stdin)) {
             fprintf(stderr, "Failed to read input. Aborting.\n");
+            free_parsed_args(args);
             return 1;
         }
         answer[strcspn(answer, "\n")] = '\0';
         if (strcmp(answer, "yes") != 0) {
             printf("Aborted by user.\n");
+            free_parsed_args(args);
             return 1;
         }
         if (clean_working_directory(".") == -1) {
             fprintf(stderr, "Failed to clean working directory.\n");
+            free_parsed_args(args);
             return 1;
         }
         printf("Working directory cleaned.\n");
@@ -444,9 +454,11 @@ int cmd_reset(int argc, char* argv[]) {
     printf("Resetting to commit %s%s...\n", target_hash_str, hard_reset ? " (hard)" : "");
 
     if (reset_to_commit(target_hash_str, hard_reset) == -1) {
+        free_parsed_args(args);
         return 1;
     }
 
     printf("Reset complete.\n");
+    free_parsed_args(args);
     return 0;
 }

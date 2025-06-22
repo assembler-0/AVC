@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include "index.h"
 #include "file_utils.h"
+#include "arg_parser.h"
 
 // Recursively collect regular file paths under a directory (skips . and .. and internal .avc)
 static void collect_paths_to_remove(const char* path, char*** paths, size_t* count, size_t* cap) {
@@ -45,37 +46,28 @@ int cmd_rm(int argc, char* argv[]) {
         return 1;
     }
 
-    if (argc < 2) {
+    // Parse arguments using the unified parser
+    parsed_args_t* args = parse_args(argc, argv, "cr"); // c=cached, r=recursive
+    if (!args) {
+        return 1;
+    }
+
+    if (get_positional_count(args) == 0) {
         fprintf(stderr, "Usage: avc rm [--cached] [-r] <file...>\n");
         fprintf(stderr, "  --cached: Remove only from staging area, keep working directory file\n");
         fprintf(stderr, "  -r: Remove directories recursively\n");
+        free_parsed_args(args);
         return 1;
     }
 
-    int cached_only = 0;
-    int recursive = 0;
-    int start_idx = 1;
-
-    // Check for flags
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--cached") == 0) {
-            cached_only = 1;
-        } else if (strcmp(argv[i], "-r") == 0) {
-            recursive = 1;
-        } else {
-            start_idx = i;
-            break;
-        }
-    }
-
-    if (start_idx >= argc) {
-        fprintf(stderr, "Usage: avc rm [--cached] [-r] <file...>\n");
-        return 1;
-    }
+    int cached_only = has_flag(args, FLAG_CACHED);
+    int recursive = has_flag(args, FLAG_RECURSIVE);
+    char** paths = get_positional_args(args);
+    size_t path_count = get_positional_count(args);
 
     // Process each path
-    for (int i = start_idx; i < argc; i++) {
-        const char* path = argv[i];
+    for (size_t i = 0; i < path_count; i++) {
+        const char* path = paths[i];
         struct stat st;
 
         // Check if path exists
@@ -92,34 +84,30 @@ int cmd_rm(int argc, char* argv[]) {
             }
 
             // For directories, we need to remove all files from index first
-            char** paths = NULL;
-            size_t path_count = 0, path_cap = 0;
-            collect_paths_to_remove(path, &paths, &path_count, &path_cap);
+            char** file_paths = NULL;
+            size_t file_count = 0, file_cap = 0;
+            collect_paths_to_remove(path, &file_paths, &file_count, &file_cap);
 
             // Remove all files from index
-            for (size_t idx = 0; idx < path_count; idx++) {
-                if (is_file_in_index(paths[idx])) {
-                    if (remove_file_from_index(paths[idx]) == -1) {
-                        fprintf(stderr, "Failed to remove '%s' from staging area\n", paths[idx]);
-                    } else {
-                        printf("Removed '%s' from staging area\n", paths[idx]);
+            for (size_t idx = 0; idx < file_count; idx++) {
+                if (is_file_in_index(file_paths[idx])) {
+                    if (remove_file_from_index(file_paths[idx]) == -1) {
+                        fprintf(stderr, "Failed to remove '%s' from staging area\n", file_paths[idx]);
                     }
                 }
             }
 
             // Clean up collected paths
-            for (size_t j = 0; j < path_count; j++) {
-                free(paths[j]);
+            for (size_t j = 0; j < file_count; j++) {
+                free(file_paths[j]);
             }
-            free(paths);
+            free(file_paths);
 
             // Remove from working directory if not --cached
             if (!cached_only) {
                 if (remove_directory_recursive(path) == -1) {
                     perror("Failed to remove directory from working directory");
                     fprintf(stderr, "Directory '%s' removed from staging area but not from working directory\n", path);
-                } else {
-                    printf("Removed directory '%s' from working directory\n", path);
                 }
             }
         } else {
@@ -156,5 +144,6 @@ int cmd_rm(int argc, char* argv[]) {
         }
     }
 
+    free_parsed_args(args);
     return 0;
 }
