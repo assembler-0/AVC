@@ -226,10 +226,29 @@ int cmd_commit(int argc, char* argv[]) {
         return 0;
     }
 
+    // Parse command line options
+    int no_compression = 0;
+    int message_index = -1;
+    
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--no-compression") == 0) {
+            no_compression = 1;
+        } else if (strcmp(argv[i], "-m") == 0 && i + 1 < argc) {
+            message_index = i + 1;
+            break;
+        }
+    }
+    
+    // Set compression based on flag
+    set_compression_enabled(!no_compression);
+    if (no_compression) {
+        printf("Compression disabled for maximum speed\n");
+    }
+
     // Get commit message
     char message[1024];
-    if (argc > 2 && strcmp(argv[1], "-m") == 0) {
-        strncpy(message, argv[2], sizeof(message) - 1);
+    if (message_index > 0) {
+        strncpy(message, argv[message_index], sizeof(message) - 1);
         message[sizeof(message) - 1] = '\0';
     } else {
         printf("Enter a commit message (or use -m <msg>): ");

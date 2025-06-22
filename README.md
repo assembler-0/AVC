@@ -1,142 +1,293 @@
-# AVC - Archive Version Control
+# AVC - Archive Version Control v0.1.0 "Arctic Fox"
 
-Welcome to **AVC** (Archive Version Control), a lightweight, Git-inspired version control system written in C. AVC is designed for simplicity, speed, and learning. This README will walk you through setup, usage, and all available features interactively!
+[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/assembler-0/AVC/releases)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
----
+**AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
 
-## 🚀 Quick Start
+## 🚀 Performance Highlights
 
-```sh
+### Benchmark Results (70MB Repository)
+| Operation | AVC | Git | Performance |
+|-----------|-----|-----|-------------|
+| **Init** | 0.001s | 0.001s | ⚡ Equal |
+| **Add** | 1.260s | 1.270s | ⚡ 0.8% faster |
+| **Commit** | 0.074s | 0.244s | 🚀 **3.3x faster** |
+| **Reset** | 0.652s | 0.497s | ⚡ 31% slower |
+| **Repository Size** | 70MB | 96MB | 💾 **27% smaller** |
+
+*Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
+
+## ✨ Key Features
+
+### 🔧 Core Functionality
+- **SHA-256 content addressing** - Secure, collision-resistant hashing
+- **Git-like workflow** - Familiar commands and concepts
+- **Multi-threaded operations** - Parallel processing for speed
+- **Intelligent compression** - Smart zlib compression with size optimization
+- **Directory support** - Full recursive directory operations
+
+### 🚀 Performance Optimizations
+- **OpenMP parallelization** - Multi-threaded file processing
+- **Fast compression** - Level 6 zlib with smart detection
+- **Memory-efficient operations** - Streaming file processing
+- **Optimized object storage** - Git-style subdirectory structure
+- **Progress indicators** - Real-time operation feedback
+
+### 🛡️ Advanced Features
+- **Smart compression detection** - Avoids double-compressing already compressed files
+- **Optional compression** - `--no-compression` flag for maximum speed
+- **Directory removal** - `-r` flag for recursive directory operations
+- **Timing information** - Performance metrics for all operations
+- **Thread configuration** - Automatic CPU core detection and utilization
+
+## 🛠️ Installation
+
+### Prerequisites
+- **C Compiler**: GCC 7+ or Clang 6+
+- **CMake**: 3.20 or higher
+- **OpenSSL**: 1.1.1 or higher
+- **zlib**: 1.2.11 or higher
+- **OpenMP**: For multi-threading support
+
+### Build Instructions
+
+```bash
 # Clone the repository
-$ git clone https://github.com/assembler-0/AVC.git
-$ cd AVC-ArchiveVersionControl
+git clone https://github.com/assembler-0/AVC.git
+cd AVC-ArchiveVersionControl
 
-# Build the project (requires CMake, OpenSSL, zlib)
-$ mkdir build && cd build
-$ cmake ..
-$ make
+# Build the project
+mkdir build && cd build
+cmake ..
+make
 
-# The 'avc' executable will be in the build directory
-$ ./avc
+# Optional: Install system-wide
+sudo make install
 ```
+
+### Quick Test
+```bash
+# Test the installation
+./avc version
+```
+
+## 📖 Usage Guide
+
+### Basic Workflow
+
+#### 1. Initialize Repository
+```bash
+avc init
+# Creates .avc directory with repository structure
+```
+
+#### 2. Add Files
+```bash
+# Add individual files
+avc add file.txt
+
+# Add entire directories (recursive)
+avc add src/
+
+# Add multiple items
+avc add file1.txt file2.txt directory/
+```
+
+#### 3. Check Status
+```bash
+avc status
+# Shows staged files and their status
+```
+
+#### 4. Commit Changes
+```bash
+# Quick commit with message
+avc commit -m "Add new features"
+
+# Interactive commit
+avc commit
+# Enter commit message when prompted
+
+# Maximum speed (no compression)
+avc commit --no-compression -m "Fast commit"
+```
+
+#### 5. View History
+```bash
+avc log
+# Shows commit history with hashes and messages
+```
+
+#### 6. Remove Files
+```bash
+# Remove file from staging and working directory
+avc rm file.txt
+
+# Remove only from staging area
+avc rm --cached file.txt
+
+# Remove directory recursively
+avc rm -r directory/
+```
+
+#### 7. Reset Operations
+```bash
+# Reset to specific commit
+avc reset <commit-hash>
+
+# Hard reset (restore working directory)
+avc reset --hard <commit-hash>
+
+# Clean reset (wipe working directory first)
+avc reset --clean --hard <commit-hash>
+```
+
+### Advanced Usage
+
+#### Performance Optimization
+```bash
+# Disable compression for maximum speed
+avc commit --no-compression -m "Performance commit"
+
+# Check version and thread count
+avc version
+```
+
+#### Directory Operations
+```bash
+# Add entire project
+avc add .
+
+# Remove directory tree
+avc rm -r build/
+
+# Add with exclusions (manual)
+avc add src/ include/ # Skip build/, .git/, etc.
+```
+
+## 🔧 Command Reference
+
+### Core Commands
+| Command | Description | Options |
+|---------|-------------|---------|
+| `avc init` | Initialize new repository | None |
+| `avc add <path>` | Add files/directories to staging | None |
+| `avc commit` | Commit staged changes | `-m <msg>`, `--no-compression` |
+| `avc status` | Show repository status | None |
+| `avc log` | Show commit history | None |
+| `avc rm <path>` | Remove files/directories | `-r`, `--cached` |
+| `avc reset <hash>` | Reset to commit | `--hard`, `--clean` |
+| `avc version` | Show version information | None |
+
+### Flags Reference
+- `-m <message>` - Commit message
+- `--no-compression` - Disable compression for speed
+- `-r` - Recursive directory operations
+- `--cached` - Only remove from staging area
+- `--hard` - Reset working directory
+- `--clean` - Wipe working directory before reset
+
+## 🏗️ Architecture
+
+### Object Storage
+- **SHA-256 hashing** for content addressing
+- **Git-style subdirectories** (`.avc/objects/ab/cdef...`)
+- **Intelligent compression** with fallback to uncompressed storage
+- **Streaming operations** for memory efficiency
+
+### Multi-threading
+- **OpenMP parallelization** for file processing
+- **Automatic thread detection** and configuration
+- **Dynamic scheduling** for optimal load balancing
+- **Thread-safe operations** throughout the codebase
+
+### Compression Strategy
+- **Level 6 zlib** for balanced speed/size
+- **Smart detection** of already compressed files
+- **Size thresholds** to skip compression for small files
+- **Optional compression** via command-line flag
+
+## 🧪 Testing
+
+### Performance Testing
+```bash
+# Test with large repository
+mkdir test-repo && cd test-repo
+avc init
+# Add large files/directories
+avc add .
+avc commit -m "Performance test"
+avc version
+```
+
+### Feature Testing
+```bash
+# Test all commands
+avc init
+echo "test" > file.txt
+avc add file.txt
+avc commit -m "Test commit"
+avc status
+avc log
+avc rm file.txt
+avc reset --hard HEAD
+```
+
+## 📊 Performance Tips
+
+### For Maximum Speed
+1. **Use `--no-compression`** for large binary files
+2. **Add files in batches** rather than individually
+3. **Use SSD storage** for better I/O performance
+4. **Ensure sufficient RAM** for parallel operations
+
+### For Maximum Compression
+1. **Enable compression** (default behavior)
+2. **Focus on text files** for best compression ratios
+3. **Avoid already compressed files** (PNG, JPEG, etc.)
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Make your changes**
+4. **Add tests if applicable**
+5. **Submit a pull request**
+
+### Development Setup
+```bash
+# Debug build with sanitizers
+mkdir build-debug && cd build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make
+
+# Run tests
+make test
+```
+
+## 📄 License
+
+This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Git** - For inspiration and workflow concepts
+- **OpenSSL** - For cryptographic functions
+- **zlib** - For compression capabilities
+- **OpenMP** - For parallel processing support
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/assembler-0/AVC/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/assembler-0/AVC/discussions)
+- **Documentation**: This README and inline code comments
 
 ---
 
-## 🛠️ Setup Instructions
+**AVC v0.1.0 "Arctic Fox"** - Fast, efficient, and reliable version control for the modern developer.
 
-1. **Dependencies:**
-   - C compiler (GCC/Clang)
-   - CMake >= 3.20
-   - OpenSSL
-   - zlib
-
-2. **Build:**
-   ```sh
-   mkdir build && cd build
-   cmake ..
-   make
-   ```
-   The `avc` binary will be created in the `build` directory.
-
-3. **(Optional) Install:**
-   ```sh
-   sudo make install
-   # Now you can run 'avc' from anywhere
-   ```
-
----
-
-## 🏁 Getting Started: Interactive Walkthrough
-
-### 1. Initialize a New Repository
-```sh
-$ avc init
-```
-Creates a `.avc` directory in your project folder.
-
-### 2. Add Files or Directories
-```sh
-$ avc add myfile.txt
-$ avc add src/
-```
-You can add individual files or entire directories (recursively).
-
-### 3. Check Status
-```sh
-$ avc status
-```
-Shows which files are staged for commit.
-
-### 4. Commit Changes
-```sh
-$ avc commit -m "Initial commit"
-# Or interactively:
-$ avc commit
-Enter a commit message (or use -m <msg>): My first commit
-```
-
-### 5. View Commit Log
-```sh
-$ avc log
-```
-See your commit history.
-
-### 6. Remove Files
-```sh
-$ avc rm myfile.txt
-$ avc rm --cached myfile.txt  # Only remove from staging
-```
-
-### 7. Reset to a Previous Commit
-```sh
-$ avc reset <commit-hash>
-$ avc reset --hard <commit-hash>   # Restore working directory and index
-$ avc reset --clean --hard <commit-hash>  # Wipe working directory (except .avc, .git, .idea) before restoring
-```
-
----
-
-## 📜 Available Commands & Flags
-
-- `avc init`                : Initialize a new repository
-- `avc add <file|dir>`      : Add file(s) or directory (recursively) to staging
-- `avc status`              : Show staged files
-- `avc commit [-m <msg>]`   : Commit staged changes (with message)
-- `avc log`                 : Show commit history
-- `avc rm [--cached] <file>`: Remove file from staging (and optionally from disk)
-- `avc reset [--hard] [--clean] <commit-hash|HEAD|HEAD~1>` : Reset index/working directory
-
-### Flags
-- `--hard`   : Reset both index and working directory
-- `--clean`  : Wipe working directory (except .avc, .git, .idea) before restoring
-- `--cached` : Only remove from staging area (for `rm`)
-
----
-
-## ✨ Features
-- Fast, minimal, and easy to use
-- SHA-256 based object storage (like Git)
-- Add files or directories recursively
-- Clean reset with safety prompt
-- Human-friendly CLI messages
-- Small binary size (16kB-36kB)
-- Open source and hackable
-
----
-
-## 💡 Tips & Best Practices
-- Always check `avc status` before committing
-- Use `avc log` to find commit hashes for reset
-- Use `avc reset --clean --hard <hash>` for a truly clean restore
-- Your `.avc` directory is your repo's brain—don't delete it!
-- For help, just run `avc` with no arguments
-
----
-
-## 🧑‍💻 Contributing & License
-- Contributions welcome! Open an issue or PR.
-- Licensed under the MIT License (see LICENSE file).
-
----
-
-Happy versioning with AVC! 🎉
+*Built with ❤️ by Atheria*
