@@ -27,7 +27,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Find required packages
-find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
 
@@ -74,8 +73,6 @@ target_include_directories(avc_core PUBLIC
 )
 
 target_link_libraries(avc_core PUBLIC
-        OpenSSL::SSL
-        OpenSSL::Crypto
         ${ZLIB_LIBRARIES}
         OpenMP::OpenMP_C
         blake3
