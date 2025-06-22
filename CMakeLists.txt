@@ -1,4 +1,3 @@
-
 cmake_minimum_required(VERSION 3.20)
 project(AVC VERSION 1.0.0 LANGUAGES C)
 
@@ -51,6 +50,7 @@ add_library(avc_core STATIC
         src/commands/reset.c
         src/commands/rm.c
         src/commands/status.c
+        src/commands/version.c
 )
 
 # Set library properties

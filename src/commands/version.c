@@ -1,0 +1,54 @@
+// src/commands/version.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <omp.h>
+#include "commands.h"
+
+// Version information
+#define AVC_VERSION "0.1.0"
+#define AVC_CODENAME "Arctic Fox"
+#define AVC_BUILD_DATE __DATE__
+#define AVC_BUILD_TIME __TIME__
+
+int cmd_version(int argc, char* argv[]) {
+    (void)argc; // Suppress unused parameter warning
+    (void)argv;
+    
+    printf("AVC - Archive Version Control\n");
+    printf("Version: %s \"%s\"\n", AVC_VERSION, AVC_CODENAME);
+    printf("Build: %s %s\n", AVC_BUILD_DATE, AVC_BUILD_TIME);
+    printf("Compiler: %s %s\n", __VERSION__, __DATE__);
+    printf("OpenMP: %d threads available\n", omp_get_num_procs());
+    printf("\n");
+    printf("Features:\n");
+    printf("  • SHA-256 based content addressing\n");
+    printf("  • Aggressive zlib compression (multi-level)\n");
+    printf("  • Multi-threaded operations (OpenMP)\n");
+    printf("  • Git-like workflow\n");
+    printf("  • Directory removal support (-r flag)\n");
+    printf("  • Smart compression detection\n");
+    printf("  • Progress indicators and timing\n");
+    printf("\n");
+    printf("Commands:\n");
+    printf("  init     - Initialize a new repository\n");
+    printf("  add      - Add files to staging area (parallel)\n");
+    printf("  commit   - Commit staged changes (parallel)\n");
+    printf("  status   - Show repository status\n");
+    printf("  log      - Show commit history\n");
+    printf("  reset    - Reset staging area\n");
+    printf("  rm       - Remove files (with -r for directories)\n");
+    printf("  version  - Show version information\n");
+    printf("\n");
+    printf("Performance Features:\n");
+    printf("  • Parallel file processing\n");
+    printf("  • Multi-threaded compression\n");
+    printf("  • Optimized object storage\n");
+    printf("  • Memory-efficient operations\n");
+    printf("\n");
+    printf("Author: Atheria\n");
+    printf("License: GPL\n");
+    printf("Repository: AVC\n");
+    
+    return 0;
+} 

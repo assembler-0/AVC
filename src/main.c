@@ -5,7 +5,7 @@
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printf("Usage: avc <command> [args]\n");
-        printf("Commands: init, add, rm, commit, status, log, reset\n");
+        printf("Commands: init, add, rm, commit, status, log, reset, version\n");
         return 1;
     }
 
@@ -25,8 +25,11 @@ int main(int argc, char* argv[]) {
         return cmd_rm(argc - 1, argv + 1);
     } else if (strcmp(command, "reset") == 0) {
         return cmd_reset(argc - 1, argv + 1);
+    } else if (strcmp(command, "version") == 0) {
+        return cmd_version(argc - 1, argv + 1);
     } else {
         printf("Unknown command: %s\n", command);
+        printf("Use 'avc version' for more information\n");
         return 1;
     }
 }

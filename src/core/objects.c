@@ -9,9 +9,17 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <zlib.h>
+#include <omp.h>
 #include "hash.h"
 #include "objects.h"
 #include <openssl/sha.h>
+static int flush_to_file(z_stream* zs, FILE* fp, unsigned char* buf, int flush_mode);
+char* compress_data(const char* data, size_t size, size_t* compressed_size);
+char* compress_data_aggressive(const char* data, size_t size, size_t* compressed_size);
+char* decompress_data(const char* compressed_data, size_t compressed_size, size_t expected_size);
+void show_compression_stats(size_t original_size, size_t compressed_size, const char* type);
+int is_likely_compressed(const char* data, size_t size);
+
 static int flush_to_file(z_stream* zs, FILE* fp, unsigned char* buf, int flush_mode) {
     int ret;
     do {
@@ -25,7 +33,7 @@ static int flush_to_file(z_stream* zs, FILE* fp, unsigned char* buf, int flush_m
     } while (zs->avail_out == 0);
     return ret;
 }
-// Compress data using zlib
+// Compress data using zlib with maximum compression
 char* compress_data(const char* data, size_t size, size_t* compressed_size) {
     uLongf dest_len = compressBound(size);
     char* compressed = malloc(dest_len);
@@ -33,7 +41,8 @@ char* compress_data(const char* data, size_t size, size_t* compressed_size) {
         return NULL;
     }
     
-    if (compress((Bytef*)compressed, &dest_len, (const Bytef*)data, size) != Z_OK) {
+    // Use maximum compression level (9) and optimized strategy
+    if (compress2((Bytef*)compressed, &dest_len, (const Bytef*)data, size, Z_BEST_COMPRESSION) != Z_OK) {
         free(compressed);
         return NULL;
     }
@@ -98,12 +107,12 @@ int store_blob_from_file(const char* filepath, char* hash_out) {
     // Initialize zlib stream for compression
     z_stream strm;
     memset(&strm, 0, sizeof(strm));
-    if (deflateInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
+    if (deflateInit(&strm, Z_BEST_COMPRESSION) != Z_OK) {
         fclose(tmp_fp);
         remove(tmp_template);
         return -1;
     }
-
+    
     // Buffer for compressed output
     unsigned char out_buf[8192];
 
@@ -216,9 +225,9 @@ int store_object(const char* type, const char* content, size_t size, char* hash_
     full_content[header_len] = '\0';
     memcpy(full_content + header_len + 1, content, size);
 
-    // Compress the full content
+    // Compress the full content with aggressive compression
     size_t compressed_size;
-    char* compressed = compress_data(full_content, full_size, &compressed_size);
+    char* compressed = compress_data_aggressive(full_content, full_size, &compressed_size);
     free(full_content);
     
     if (!compressed) {
@@ -237,6 +246,9 @@ int store_object(const char* type, const char* content, size_t size, char* hash_
     fwrite(compressed, 1, compressed_size, obj_file);
     fclose(obj_file);
     free(compressed);
+
+    // Calculate and display compression statistics
+    show_compression_stats(size, compressed_size, type);
 
     return 0;
 }
@@ -387,4 +399,133 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
 
     *size_out = declared_size;
     return content;
+}
+
+// Calculate and display compression statistics
+void show_compression_stats(size_t original_size, size_t compressed_size, const char* type) {
+    if (original_size == 0) return;
+    
+    double ratio = (double)compressed_size / original_size * 100.0;
+    double savings = (double)(original_size - compressed_size) / original_size * 100.0;
+    
+    printf("Compression: %s object - %zu -> %zu bytes (%.1f%% of original, %.1f%% saved)\n", 
+           type, original_size, compressed_size, ratio, savings);
+}
+
+// Detect if data is likely already compressed
+int is_likely_compressed(const char* data, size_t size) {
+    if (size < 4) return 0;
+    
+    // Check for common compression signatures
+    unsigned char* bytes = (unsigned char*)data;
+    
+    // zlib/gzip header
+    if (size >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) return 1;
+    
+    // PNG signature
+    if (size >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && 
+        bytes[2] == 0x4e && bytes[3] == 0x47) return 1;
+    
+    // JPEG signature
+    if (size >= 2 && bytes[0] == 0xff && bytes[1] == 0xd8) return 1;
+    
+    // ZIP signature
+    if (size >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b && 
+        bytes[2] == 0x03 && bytes[3] == 0x04) return 1;
+    
+    // Check entropy - if data has high entropy, it might already be compressed
+    int byte_counts[256] = {0};
+    for (size_t i = 0; i < size && i < 1024; i++) { // Sample first 1KB
+        byte_counts[bytes[i]]++;
+    }
+    
+    int unique_bytes = 0;
+    for (int i = 0; i < 256; i++) {
+        if (byte_counts[i] > 0) unique_bytes++;
+    }
+    
+    // If we have many unique bytes in a small sample, data might be compressed
+    return unique_bytes > 200; // High entropy threshold
+}
+
+// Aggressive compression with multiple strategies
+char* compress_data_aggressive(const char* data, size_t size, size_t* compressed_size) {
+    // Check if data is likely already compressed
+    if (is_likely_compressed(data, size)) {
+        // For already compressed data, use lighter compression or store as-is
+        if (size < 1024) {
+            // For small compressed data, store as-is to avoid overhead
+            char* copy = malloc(size);
+            if (copy) {
+                memcpy(copy, data, size);
+                *compressed_size = size;
+                return copy;
+            }
+        } else {
+            // For larger compressed data, use light compression
+            uLongf dest_len = compressBound(size);
+            char* compressed = malloc(dest_len);
+            if (compressed) {
+                if (compress2((Bytef*)compressed, &dest_len, (const Bytef*)data, size, Z_BEST_SPEED) == Z_OK) {
+                    if (dest_len < size) {
+                        *compressed_size = dest_len;
+                        return compressed;
+                    } else {
+                        free(compressed);
+                        // Store as-is if compression doesn't help
+                        char* copy = malloc(size);
+                        if (copy) {
+                            memcpy(copy, data, size);
+                            *compressed_size = size;
+                            return copy;
+                        }
+                    }
+                } else {
+                    free(compressed);
+                }
+            }
+        }
+    }
+    
+    // Try different compression levels in parallel and pick the best
+    char* best_compressed = NULL;
+    size_t best_size = SIZE_MAX;
+    
+    // Try different compression levels: 6, 8, 9
+    int levels[] = {6, 8, 9};
+    char* compressed_results[3] = {NULL, NULL, NULL};
+    size_t compressed_sizes[3] = {0, 0, 0};
+    
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < 3; i++) {
+        uLongf dest_len = compressBound(size);
+        char* compressed = malloc(dest_len);
+        if (compressed) {
+            if (compress2((Bytef*)compressed, &dest_len, (const Bytef*)data, size, levels[i]) == Z_OK) {
+                compressed_results[i] = compressed;
+                compressed_sizes[i] = dest_len;
+            } else {
+                free(compressed);
+            }
+        }
+    }
+    
+    // Find the best result
+    for (int i = 0; i < 3; i++) {
+        if (compressed_results[i] && compressed_sizes[i] < best_size) {
+            if (best_compressed) free(best_compressed);
+            best_compressed = compressed_results[i];
+            best_size = compressed_sizes[i];
+        } else if (compressed_results[i]) {
+            free(compressed_results[i]);
+        }
+    }
+    
+    if (best_compressed) {
+        *compressed_size = best_size;
+        return best_compressed;
+    }
+    
+    // Fallback to basic compression
+    return compress_data(data, size, compressed_size);
 }

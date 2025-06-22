@@ -4,10 +4,36 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <omp.h>
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
 #include "index.h"
+
+// Structure to hold file information for parallel processing
+typedef struct {
+    char hash[65];
+    char filepath[256];
+    unsigned int mode;
+    char entry[512];
+    int entry_len;
+} file_entry_t;
+
+// Configure OpenMP for optimal performance
+static void configure_parallel_processing() {
+    // Get number of CPU cores
+    int num_cores = omp_get_num_procs();
+    
+    // Set number of threads (use all cores for maximum performance)
+    omp_set_num_threads(num_cores);
+    
+    // Set thread affinity for better performance
+    #ifdef _GNU_SOURCE
+    omp_set_schedule(omp_sched_dynamic, 1);
+    #endif
+    
+    printf("Using %d threads for parallel processing\n", num_cores);
+}
 
 int create_tree(char* tree_hash) {
     FILE* index = fopen(".avc/index", "r");
@@ -16,48 +42,90 @@ int create_tree(char* tree_hash) {
         return -1;
     }
 
-    // Start with initial buffer size and grow as needed
-    size_t buffer_size = 8192;
-    size_t content_len = 0;
-    char* tree_content = malloc(buffer_size);
-    if (!tree_content) {
+    // First pass: count files and collect file information
+    char line[1024];
+    int file_count = 0;
+    
+    // Count total files
+    while (fgets(line, sizeof(line), index)) {
+        file_count++;
+    }
+    rewind(index);
+    
+    if (file_count == 0) {
+        fclose(index);
+        fprintf(stderr, "No files to commit (index is empty)\n");
+        return -1;
+    }
+    
+    // Allocate array for file entries
+    file_entry_t* files = malloc(file_count * sizeof(file_entry_t));
+    if (!files) {
         fprintf(stderr, "Memory allocation failed\n");
         fclose(index);
         return -1;
     }
-    tree_content[0] = '\0';
-
-    char line[1024];
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], filepath[256]; // Updated to 64 chars for SHA-256
+    
+    // Second pass: collect file information
+    int idx = 0;
+    while (fgets(line, sizeof(line), index) && idx < file_count) {
+        char hash[65], filepath[256];
         unsigned int mode;
 
         if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
-            // Create entry: mode filepath hash
-            char entry[512];
-            int entry_len = snprintf(entry, sizeof(entry), "%o %s %s\n", mode, filepath, hash);
-
-            // Check if we need to grow the buffer
-            if (content_len + entry_len + 1 > buffer_size) {
-                buffer_size *= 2;
-                char* new_buffer = realloc(tree_content, buffer_size);
-                if (!new_buffer) {
-                    fprintf(stderr, "Memory reallocation failed\n");
-                    free(tree_content);
-                    fclose(index);
-                    return -1;
-                }
-                tree_content = new_buffer;
-            }
-
-            // Safe concatenation
-            strcat(tree_content, entry);
-            content_len += entry_len;
+            strcpy(files[idx].hash, hash);
+            strcpy(files[idx].filepath, filepath);
+            files[idx].mode = mode;
+            
+            // Pre-create entry string
+            files[idx].entry_len = snprintf(files[idx].entry, sizeof(files[idx].entry), 
+                                          "%o %s %s\n", mode, filepath, hash);
+            idx++;
         }
     }
     fclose(index);
-
+    
+    int actual_file_count = idx;
+    
+    // Sort entries for consistent tree creation
+    for (int i = 0; i < actual_file_count - 1; i++) {
+        for (int j = i + 1; j < actual_file_count; j++) {
+            if (strcmp(files[i].filepath, files[j].filepath) > 0) {
+                file_entry_t temp = files[i];
+                files[i] = files[j];
+                files[j] = temp;
+            }
+        }
+    }
+    
+    // Calculate total size needed for tree content
+    size_t total_size = 0;
+    for (int i = 0; i < actual_file_count; i++) {
+        total_size += files[i].entry_len;
+    }
+    
+    // Allocate tree content buffer
+    char* tree_content = malloc(total_size + 1);
+    if (!tree_content) {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(files);
+        return -1;
+    }
+    
+    // Build tree content
+    size_t offset = 0;
+    printf("Creating tree with %d files...\n", actual_file_count);
+    
+    for (int i = 0; i < actual_file_count; i++) {
+        memcpy(tree_content + offset, files[i].entry, files[i].entry_len);
+        offset += files[i].entry_len;
+    }
+    tree_content[total_size] = '\0';
+    
+    free(files);
+    
     // Generate tree hash
+    printf("Storing tree object...\n");
     int result = store_object("tree", tree_content, strlen(tree_content), tree_hash);
     free(tree_content);
 
@@ -177,7 +245,14 @@ int cmd_commit(int argc, char* argv[]) {
         return 1;
     }
 
+    printf("Starting commit process...\n");
+    clock_t start_time = clock();
+
+    // Configure OpenMP
+    configure_parallel_processing();
+
     // Create tree from index
+    printf("Creating tree object...\n");
     char tree_hash[65]; // Updated to 65 for SHA-256
     if (create_tree(tree_hash) == -1) {
         return 1;
@@ -188,6 +263,7 @@ int cmd_commit(int argc, char* argv[]) {
     get_current_commit(parent_hash);
 
     // Create commit object
+    printf("Creating commit object...\n");
     char commit_content[2048];
     time_t now = time(NULL);
     char* author = getenv("USER");
@@ -221,7 +297,11 @@ int cmd_commit(int argc, char* argv[]) {
         fprintf(stderr, "Warning: Failed to clear index after commit\n");
     }
 
+    clock_t end_time = clock();
+    double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    
     printf("[main %.7s] %s\n", commit_hash, message);
+    printf("Commit completed in %.3f seconds\n", elapsed_time);
 
     return 0;
 }
