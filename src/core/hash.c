@@ -2,21 +2,23 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <openssl/sha.h>
+#include <blake3.h> // BLAKE3 reference implementation
 #include "hash.h"
 #define HASH_SIZE 64
 void sha256_hash(const char* content, size_t size, char* hash_out) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)content, size, hash);
-
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        sprintf(hash_out + (i * 2), "%02x", hash[i]);
+    uint8_t digest[32];
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, content, size);
+    blake3_hasher_finalize(&hasher, digest, 32);
+    for (int i = 0; i < 32; i++) {
+        sprintf(hash_out + (i * 2), "%02x", digest[i]);
     }
     hash_out[64] = '\0';
 }
 
-// Hash with Git-style object format
-// Git prepends "blob <size>\0" before hashing
+// Hash with Git-style object format using BLAKE3
+// Git prepends "blob <size>\0" before hashing (same as before)
 void sha256_hash_object(const char* type, const char* content, size_t size, char* hash_out) {
     // Create Git-style object format
     char header[64];

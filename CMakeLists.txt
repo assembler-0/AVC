@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(AVC VERSION 1.0.0 LANGUAGES C)
+project(AVC VERSION 0.1.1 LANGUAGES C)
 
 # Set C standard
 set(CMAKE_C_STANDARD 17)
@@ -31,6 +31,16 @@ find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
 
+
+add_library(blake3 STATIC
+    src/blake3/blake3.c
+    src/blake3/blake3_dispatch.c
+    src/blake3/blake3_portable.c      # portable fallback
+    src/blake3/blake3_sse2.c          # ← add
+    src/blake3/blake3_sse41.c         # ← add
+    src/blake3/blake3_avx2.c          # ← add
+)
+target_include_directories(blake3 PUBLIC src/blake3)
 # Create a library for core functionality
 add_library(avc_core STATIC
         # Core modules
@@ -68,8 +78,9 @@ target_link_libraries(avc_core PUBLIC
         OpenSSL::Crypto
         ${ZLIB_LIBRARIES}
         OpenMP::OpenMP_C
+        blake3
 )
-
+target_compile_definitions(blake3 PUBLIC BLAKE3_NO_AVX512=1)
 target_compile_definitions(avc_core PRIVATE
         $<$<CONFIG:Debug>:AVC_DEBUG>
         $<$<CONFIG:Release>:AVC_RELEASE>

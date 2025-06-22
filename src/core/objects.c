@@ -12,7 +12,7 @@
 #include <omp.h>
 #include "hash.h"
 #include "objects.h"
-#include <openssl/sha.h>
+#include <blake3.h>
 static int flush_to_file(z_stream* zs, FILE* fp, unsigned char* buf, int flush_mode);
 char* compress_data(const char* data, size_t size, size_t* compressed_size);
 char* compress_data_aggressive(const char* data, size_t size, size_t* compressed_size);
@@ -177,10 +177,10 @@ int store_blob_from_file(const char* filepath, char* hash_out) {
     char header[64];
     int header_len = snprintf(header, sizeof(header), "blob %zu", size);
 
-    // Set up SHA-256 context
-    SHA256_CTX sha_ctx;
-    SHA256_Init(&sha_ctx);
-    SHA256_Update(&sha_ctx, header, header_len + 1); // include null terminator
+    // Set up BLAKE3 hasher (unkeyed)
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, header, header_len + 1); // include null terminator
 
     // Prepare temp file inside .avc/objects for compressed data
     if (mkdir(".avc/objects/tmp", 0755) == -1 && errno != EEXIST) {
@@ -232,7 +232,7 @@ int store_blob_from_file(const char* filepath, char* hash_out) {
     unsigned char in_buf[8192];
     size_t read_bytes;
     while ((read_bytes = fread(in_buf, 1, sizeof(in_buf), src)) > 0) {
-        SHA256_Update(&sha_ctx, in_buf, read_bytes);
+        blake3_hasher_update(&hasher, in_buf, read_bytes);
         strm.avail_in = read_bytes;
         strm.next_in = in_buf;
         if (flush_to_file(&strm, tmp_fp, out_buf, Z_NO_FLUSH) != Z_OK) {
@@ -250,9 +250,9 @@ int store_blob_from_file(const char* filepath, char* hash_out) {
     fclose(tmp_fp);
 
     // Finalize hash
-    unsigned char digest[SHA256_DIGEST_LENGTH];
-    SHA256_Final(digest, &sha_ctx);
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+    uint8_t digest[32];
+    blake3_hasher_finalize(&hasher, digest, 32);
+    for (int i = 0; i < 32; ++i) {
         sprintf(hash_out + i * 2, "%02x", digest[i]);
     }
     hash_out[64] = '\0';
@@ -356,21 +356,21 @@ int sha256_file_hex(const char* filepath, char hash_out[65]) {
     char header[64];
     int header_len = snprintf(header, sizeof(header), "blob %zu", size);
 
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, header, header_len + 1); // include null terminator
+    blake3_hasher ctx;
+    blake3_hasher_init(&ctx);
+    blake3_hasher_update(&ctx, header, header_len + 1);
 
     FILE* fp = fopen(filepath, "rb");
     if (!fp) return -1;
     unsigned char buf[8192];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        SHA256_Update(&ctx, buf, n);
+        blake3_hasher_update(&ctx, buf, n);
     }
     fclose(fp);
-    unsigned char digest[SHA256_DIGEST_LENGTH];
-    SHA256_Final(digest, &ctx);
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) sprintf(hash_out + i*2, "%02x", digest[i]);
+    uint8_t digest2[32];
+    blake3_hasher_finalize(&ctx, digest2, 32);
+    for (int i = 0; i < 32; ++i) sprintf(hash_out + i*2, "%02x", digest2[i]);
     hash_out[64] = '\0';
     return 0;
 }
