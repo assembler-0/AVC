@@ -290,4 +290,4 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 **AVC v0.1.0 "Arctic Fox"** - Fast, efficient, and reliable version control for the modern developer.
 
-*Built with ❤️ by Atheria*
+*Built with  by Atheria*
