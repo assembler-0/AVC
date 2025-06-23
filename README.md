@@ -22,7 +22,7 @@
 | Operation | AVC    | AVC --fast | Git | Performance               |
 |-----------|--------|------------|-----|---------------------------|
 | **Init** | 0.001s | 0.001      | 0.001s | ⚡ Equal                   |
-| **Add** | 0.486s | 0.089s     | 1.270s | ⚡ Up to **14.3x** faster  |
+| **Add** | 0.486s | 0.1s       | 1.270s | ⚡ Up to **12.7x** faster  |
 | **Commit** | 0.053s | 0.05s      | 0.244s | 🚀 **4.6x faster**        |
 | **Reset** | 0.323s | 0.3s       | 0.497s | ⚡ 1.5x faster             |
 | **Repository Size** | 67MB   | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
