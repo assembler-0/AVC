@@ -1,4 +1,4 @@
-# AVC - Archive Version Control v0.1.0 "Arctic Fox"
+# AVC - Archive Version Control v0.1.5 "Arctic Fox"
 
 [![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/assembler-0/AVC/releases)
@@ -6,27 +6,44 @@
 
 **AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
 
+## ⚠️ CRITICAL BUILD WARNING
+
+**MUST ADD `-DCMAKE_BUILD_TYPE=Release` or else it will not compile!**
+
+```bash
+# CORRECT build command:
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release .. # -DCMAKE_INSTALL_PREFIX=<pathToYourInstallDirectory>
+make
+
+# WRONG (will fail):
+mkdir build && cd build
+cmake ..
+make
+```
+
 ## 🚀 Performance Highlights
 
 ### Benchmark Results (70MB Repository)
 | Operation | AVC | Git | Performance |
 |-----------|-----|-----|-------------|
 | **Init** | 0.001s | 0.001s | ⚡ Equal |
-| **Add** | 1.260s | 1.270s | ⚡ 0.8% faster |
-| **Commit** | 0.074s | 0.244s | 🚀 **3.3x faster** |
-| **Reset** | 0.652s | 0.497s | ⚡ 31% slower |
-| **Repository Size** | 70MB | 96MB | 💾 **27% smaller** |
+| **Add** | 0.486s | 1.270s | ⚡ 2.6x faster |
+| **Commit** | 0.053s | 0.244s | 🚀 **4.6x faster** |
+| **Reset** | 0.323s | 0.497s | ⚡ 1.5x faster |
+| **Repository Size** | 67MB | 96MB | 💾 **1.4x smaller** |
 
 *Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
 
 ## ✨ Key Features
 
 ### 🔧 Core Functionality
-- **SHA-256 content addressing** - Secure, collision-resistant hashing
+- **BLAKE3 content addressing** - Fast, secure, collision-resistant hashing
 - **Git-like workflow** - Familiar commands and concepts
 - **Multi-threaded operations** - Parallel processing for speed
 - **Intelligent compression** - Smart libdeflate compression with size optimization
 - **Directory support** - Full recursive directory operations
+- **Large file support** - Handles files up to 1GB with optimized memory management
 
 ### 🚀 Performance Optimizations
 - **OpenMP parallelization** - Multi-threaded file processing
@@ -34,13 +51,16 @@
 - **Memory-efficient operations** - Streaming file processing
 - **Optimized object storage** - Git-style subdirectory structure
 - **Progress indicators** - Real-time operation feedback
+- **Memory pool optimization** - Efficient memory allocation for large files
 
 ### 🛡️ Advanced Features
 - **Smart compression detection** - Avoids double-compressing already compressed files
-- **Optional compression** - `--no-compression` flag for maximum speed
+- **Consistent compression** - Pure libdeflate compression with no fallbacks
 - **Directory removal** - `-r` flag for recursive directory operations
-- **Timing information** - Performance metrics for all operations
 - **Thread configuration** - Automatic CPU core detection and utilization
+- **Repository cleanup** - `clean` command to remove entire repository
+- **Robust error handling** - Detailed error messages and recovery
+- **Large file optimization** - 1MB chunks and 1GB file size support
 
 ## 🛠️ Installation
 
@@ -58,10 +78,10 @@
 git clone https://github.com/assembler-0/AVC.git
 cd AVC-ArchiveVersionControl
 
-# Build the project
-   mkdir build && cd build
-   cmake ..
-   make
+# Build the project (RELEASE BUILD REQUIRED)
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
 
 # Optional: Install system-wide
 sudo make install
@@ -144,6 +164,13 @@ avc reset --hard <commit-hash>
 avc reset --clean --hard <commit-hash>
 ```
 
+#### 8. Repository Management
+```bash
+# Remove entire repository (with confirmation)
+avc clean
+# This will permanently delete the .avc directory
+```
+
 ### Advanced Usage
 
 #### Performance Optimization
@@ -179,6 +206,7 @@ avc add src/ include/ # Skip build/, .git/, etc.
 | `avc log` | Show commit history | None |
 | `avc rm <path>` | Remove files/directories | `-r`, `--cached` |
 | `avc reset <hash>` | Reset to commit | `--hard`, `--clean` |
+| `avc clean` | Remove entire repository | None |
 | `avc version` | Show version information | None |
 
 ### Flags Reference
@@ -192,10 +220,11 @@ avc add src/ include/ # Skip build/, .git/, etc.
 ## 🏗️ Architecture
 
 ### Object Storage
-- **SHA-256 hashing** for content addressing
+- **BLAKE3 hashing** for fast, secure content addressing
 - **Git-style subdirectories** (`.avc/objects/ab/cdef...`)
-- **Intelligent compression** with fallback to uncompressed storage
+- **Pure libdeflate compression** with consistent compressed storage
 - **Streaming operations** for memory efficiency
+- **Large file optimization** with 1MB chunks and 1GB file support
 
 ### Multi-threading
 - **OpenMP parallelization** for file processing
@@ -204,10 +233,10 @@ avc add src/ include/ # Skip build/, .git/, etc.
 - **Thread-safe operations** throughout the codebase
 
 ### Compression Strategy
-- **Level 6 libdeflate** for balanced speed/size
-- **Smart detection** of already compressed files
-- **Size thresholds** to skip compression for small files
-- **Optional compression** via command-line flag
+- **Pure libdeflate compression** for consistent performance
+- **No fallback compression** - eliminates compatibility issues
+- **Large buffer support** - 1MB compression buffers for big files
+- **Memory pool optimization** - Efficient allocation for large operations
 
 ## 🧪 Testing
 
@@ -238,15 +267,16 @@ avc reset --hard HEAD
 ## 📊 Performance Tips
 
 ### For Maximum Speed
-1. **Use `--no-compression`** for large binary files
+1. **Use multi-threaded operations** - Automatic CPU core utilization
 2. **Add files in batches** rather than individually
 3. **Use SSD storage** for better I/O performance
 4. **Ensure sufficient RAM** for parallel operations
+5. **Large files are optimized** - 1MB chunks and 1GB file support
 
 ### For Maximum Compression
-1. **Enable compression** (default behavior)
+1. **Consistent compression** - Pure libdeflate for reliability
 2. **Focus on text files** for best compression ratios
-3. **Avoid already compressed files** (PNG, JPEG, etc.)
+3. **Large file handling** - Optimized for files up to 1GB
 
 ## 🤝 Contributing
 

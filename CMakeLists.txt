@@ -62,6 +62,7 @@ add_library(avc_core STATIC
         src/commands/rm.c
         src/commands/status.c
         src/commands/version.c
+        src/commands/clean.c
 )
 
 # Set library properties

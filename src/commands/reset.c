@@ -73,6 +73,10 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     // Load commit object
     size_t commit_size;
     char commit_type[16];
+    
+    // Check object format first
+    check_object_format(commit_hash);
+    
     char* commit_content = load_object(commit_hash, &commit_size, commit_type);
     if (!commit_content) {
         fprintf(stderr, "Failed to load commit object: %s\n", commit_hash);
@@ -122,6 +126,10 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     // Load tree object
     size_t tree_size;
     char tree_type[16];
+    
+    // Check tree object format
+    check_object_format(tree_hash);
+    
     char* tree_content = load_object(tree_hash, &tree_size, tree_type);
     if (!tree_content) {
         fprintf(stderr, "Failed to load tree object: %s\n", tree_hash);
@@ -174,12 +182,21 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
             // Load file content
             size_t file_size;
             char file_type[16];
+            
+            // Check file object format
+            check_object_format(file_hash);
+            
             char* file_content = load_object(file_hash, &file_size, file_type);
 
             if (!file_content) {
                 fprintf(stderr, "Failed to load file content for: %s (hash: %s)\n", filepath, file_hash);
                 line_start = line_end + 1;
                 continue;
+            }
+
+            // Debug: Check file size
+            if (file_size >= 2000 && file_size <= 3000) {
+                // File loaded successfully
             }
 
             if (strcmp(file_type, "blob") != 0) {

@@ -95,5 +95,6 @@ int cmd_init(int argc, char* argv[]) {
     }
 
     printf("Initialized empty avc repository in %s/.avc/\n", repo_path);
+    
     return 0;
 }

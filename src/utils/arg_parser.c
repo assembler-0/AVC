@@ -55,14 +55,6 @@ parsed_args_t* parse_args(int argc, char* argv[], const char* valid_flags) {
                     free_parsed_args(args);
                     return NULL;
                 }
-            } else if (strcmp(arg, "--no-compression") == 0) {
-                if (strchr(valid_flags, 'n')) {
-                    args->flags |= FLAG_NO_COMPRESSION;
-                } else {
-                    fprintf(stderr, "Error: --no-compression flag not valid for this command\n");
-                    free_parsed_args(args);
-                    return NULL;
-                }
             } else if (strcmp(arg, "-m") == 0) {
                 if (strchr(valid_flags, 'm')) {
                     if (i + 1 < argc) {

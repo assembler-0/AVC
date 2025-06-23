@@ -228,18 +228,13 @@ int cmd_commit(int argc, char* argv[]) {
     }
 
     // Parse command line options using the unified parser
-    parsed_args_t* args = parse_args(argc, argv, "mn"); // m=message, n=no-compression
+    parsed_args_t* args = parse_args(argc, argv, "m"); // m=message
     if (!args) {
+        fprintf(stderr, "Usage: avc commit [-m <message>]\n");
+        fprintf(stderr, "  -m <message>: Specify commit message\n");
         return 1;
     }
     
-    // Set compression based on flag
-    int no_compression = has_flag(args, FLAG_NO_COMPRESSION);
-    set_compression_enabled(!no_compression);
-    if (no_compression) {
-        printf("Compression disabled for maximum speed\n");
-    }
-
     // Get commit message
     char message[1024];
     char* msg = get_message(args);
@@ -322,6 +317,9 @@ int cmd_commit(int argc, char* argv[]) {
     
     printf("[main %.7s] %s\n", commit_hash, message);
     printf("Commit completed in %.3f seconds\n", elapsed_time);
+
+    // Clean up memory pool to prevent memory leaks
+    reset_memory_pool();
 
     free_parsed_args(args);
     return 0;

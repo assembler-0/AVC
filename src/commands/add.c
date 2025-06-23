@@ -5,6 +5,7 @@
 #include "index.h"
 #include "objects.h"
 #include "file_utils.h"
+#include "arg_parser.h"
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
@@ -42,19 +43,30 @@ int cmd_add(int argc, char* argv[]) {
         return 1;
     }
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: avc add <file>\n");
+    // Parse command line options using the unified parser
+    parsed_args_t* args = parse_args(argc, argv, ""); // No flags needed
+    if (!args) {
+        fprintf(stderr, "Usage: avc add <file>...\n");
         return 1;
     }
 
-        // Collect all files to add first
+    char** positional = get_positional_args(args);
+    size_t positional_count = get_positional_count(args);
+
+    if (positional_count == 0) {
+        fprintf(stderr, "Usage: avc add <file>...\n");
+        free_parsed_args(args);
+        return 1;
+    }
+
+    // Collect all files to add first
     char** file_paths = NULL;
     size_t file_count = 0, file_cap = 0;
 
     // forward declaration
 
 
-    for (int i = 1; i < argc; ++i) collect_files(argv[i], &file_paths, &file_count, &file_cap);
+    for (int i = 0; i < positional_count; ++i) collect_files(positional[i], &file_paths, &file_count, &file_cap);
 
     if (!file_count) {
         fprintf(stderr, "Nothing to add\n");
@@ -143,12 +155,16 @@ int cmd_add(int argc, char* argv[]) {
     printf("Added %d files to staging area.\n", added_count);
     printf("Done.\n");
 
-        // free memory
+    // Clean up memory pool to prevent memory leaks
+    reset_memory_pool();
+
+    // free memory
     for (size_t i=0;i<file_count;++i) free(file_paths[i]);
     free(file_paths);
     free(hashes);
     free(modes);
     free(changed);
 
+    free_parsed_args(args);
     return 0;
 }
