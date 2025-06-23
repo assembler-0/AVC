@@ -26,6 +26,7 @@
 | **Commit** | 0.053s | 0.006s     | 0.244s | 🚀 **Up to 40.7x faster** |
 | **Reset** | 0.323s | 0.317s     | 0.497s | ⚡ 1.5x faster             |
 | **Repository Size** | 67MB | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
+
 **Best run*
 
 *Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
