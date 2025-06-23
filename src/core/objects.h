@@ -14,9 +14,12 @@ int store_blob_from_file(const char* filepath, char* hash_out);
 char* load_object(const char* hash, size_t* size_out, char* type_out);
 
 // Hash functions
-int sha256_file_hex(const char* filepath, char hash_out[65]);
+int blake3_file_hex(const char* filepath, char hash_out[65]);
 
 // Compression control
 void set_compression_enabled(int enabled);
+
+// Free memory pool (call periodically)
+void free_memory_pool(void);
 
 #endif // OBJECTS_H

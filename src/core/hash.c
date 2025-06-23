@@ -5,7 +5,7 @@
 #include <blake3.h> // BLAKE3 reference implementation
 #include "hash.h"
 #define HASH_SIZE 64
-void sha256_hash(const char* content, size_t size, char* hash_out) {
+void blake3_hash(const char* content, size_t size, char* hash_out) {
     uint8_t digest[32];
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
@@ -19,7 +19,7 @@ void sha256_hash(const char* content, size_t size, char* hash_out) {
 
 // Hash with Git-style object format using BLAKE3
 // Git prepends "blob <size>\0" before hashing (same as before)
-void sha256_hash_object(const char* type, const char* content, size_t size, char* hash_out) {
+void blake3_hash_object(const char* type, const char* content, size_t size, char* hash_out) {
     // Create Git-style object format
     char header[64];
     int header_len = snprintf(header, sizeof(header), "%s %zu", type, size);
@@ -38,7 +38,7 @@ void sha256_hash_object(const char* type, const char* content, size_t size, char
     memcpy(full_content + header_len + 1, content, size);
 
     // Hash the full content
-    sha256_hash(full_content, total_size, hash_out);
+    blake3_hash(full_content, total_size, hash_out);
 
     free(full_content);
 }

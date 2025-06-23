@@ -27,9 +27,10 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Find required packages
-find_package(ZLIB REQUIRED)
-find_package(OpenMP REQUIRED)
-
+find_package(OpenSSL REQUIRED)
+find_package(OpenMP)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBDEFLATE REQUIRED libdeflate)
 
 add_library(blake3 STATIC
     src/blake3/blake3.c
@@ -65,15 +66,17 @@ add_library(avc_core STATIC
 
 # Set library properties
 target_include_directories(avc_core PUBLIC
-        include
-        src
-        src/core
-        src/commands
-        src/utils
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
+        ${OPENSSL_INCLUDE_DIR}
+        ${LIBDEFLATE_INCLUDE_DIRS}
 )
 
 target_link_libraries(avc_core PUBLIC
-        ${ZLIB_LIBRARIES}
+        ${LIBDEFLATE_LIBRARIES}
         OpenMP::OpenMP_C
         blake3
 )
@@ -129,7 +132,7 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Archive Version Control - A Git-like VCS")
 set(CPACK_PACKAGE_CONTACT "your.email@example.com")
 set(CPACK_GENERATOR "TGZ;DEB")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3, zlib1g")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3, libdeflate0")
 include(CPack)
 
 # Testing configuration

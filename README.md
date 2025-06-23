@@ -25,12 +25,12 @@
 - **SHA-256 content addressing** - Secure, collision-resistant hashing
 - **Git-like workflow** - Familiar commands and concepts
 - **Multi-threaded operations** - Parallel processing for speed
-- **Intelligent compression** - Smart zlib compression with size optimization
+- **Intelligent compression** - Smart libdeflate compression with size optimization
 - **Directory support** - Full recursive directory operations
 
 ### 🚀 Performance Optimizations
 - **OpenMP parallelization** - Multi-threaded file processing
-- **Fast compression** - Level 6 zlib with smart detection
+- **Fast compression** - Level 6 libdeflate with smart detection
 - **Memory-efficient operations** - Streaming file processing
 - **Optimized object storage** - Git-style subdirectory structure
 - **Progress indicators** - Real-time operation feedback
@@ -48,7 +48,7 @@
 - **C Compiler**: GCC 7+ or Clang 6+
 - **CMake**: 3.20 or higher
 - **OpenSSL**: 1.1.1 or higher
-- **zlib**: 1.2.11 or higher
+- **libdeflate**: 1.0 or higher
 - **OpenMP**: For multi-threading support
 
 ### Build Instructions
@@ -204,7 +204,7 @@ avc add src/ include/ # Skip build/, .git/, etc.
 - **Thread-safe operations** throughout the codebase
 
 ### Compression Strategy
-- **Level 6 zlib** for balanced speed/size
+- **Level 6 libdeflate** for balanced speed/size
 - **Smart detection** of already compressed files
 - **Size thresholds** to skip compression for small files
 - **Optional compression** via command-line flag
@@ -277,7 +277,7 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 - **Git** - For inspiration and workflow concepts
 - **OpenSSL** - For cryptographic functions
-- **zlib** - For compression capabilities
+- **libdeflate** - For compression capabilities
 - **OpenMP** - For parallel processing support
 
 ## 📞 Support

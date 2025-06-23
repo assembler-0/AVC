@@ -95,7 +95,7 @@ int cmd_add(int argc, char* argv[]) {
         const char* old_hash = index_get_hash(normalized_path);
         if (old_hash) {
             char new_hash[65];
-            sha256_file_hex(file_paths[i], new_hash);
+            blake3_file_hex(file_paths[i], new_hash);
             if (strcmp(old_hash, new_hash) == 0) {
                 // unchanged, reuse old hash but mark as unchanged
                 strcpy(hashes[i], old_hash);
