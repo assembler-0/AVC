@@ -44,7 +44,7 @@ int cmd_add(int argc, char* argv[]) {
     }
 
     // Parse command line options using the unified parser
-    parsed_args_t* args = parse_args(argc, argv, ""); // No flags needed
+    parsed_args_t* args = parse_args(argc, argv, "f"); // Supports --fast/-f
     if (!args) {
         fprintf(stderr, "Usage: avc add <file>...\n");
         return 1;
@@ -52,6 +52,11 @@ int cmd_add(int argc, char* argv[]) {
 
     char** positional = get_positional_args(args);
     size_t positional_count = get_positional_count(args);
+
+    // Enable fast compression if requested
+    if (has_flag(args, FLAG_FAST)) {
+        objects_set_fast_mode(1);
+    }
 
     if (positional_count == 0) {
         fprintf(stderr, "Usage: avc add <file>...\n");

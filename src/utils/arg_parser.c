@@ -55,6 +55,14 @@ parsed_args_t* parse_args(int argc, char* argv[], const char* valid_flags) {
                     free_parsed_args(args);
                     return NULL;
                 }
+            } else if (strcmp(arg, "--fast") == 0 || strcmp(arg, "-f") == 0) {
+                if (strchr(valid_flags, 'f')) {
+                    args->flags |= FLAG_FAST;
+                } else {
+                    fprintf(stderr, "Error: --fast flag not valid for this command\n");
+                    free_parsed_args(args);
+                    return NULL;
+                }
             } else if (strcmp(arg, "-m") == 0) {
                 if (strchr(valid_flags, 'm')) {
                     if (i + 1 < argc) {

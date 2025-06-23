@@ -15,8 +15,11 @@
 #include <libdeflate.h>
 
 // Compression constants
-#define AVC_COMPRESSION_LEVEL_MAX 0  // libdeflate supports 1-12, but 9 is more reliable
-#define AVC_COMPRESSION_LEVEL_BALANCED 0
+static int g_fast_mode = 0; // 0 = normal, 1 = fast
+void objects_set_fast_mode(int fast) { g_fast_mode = fast; }
+#define AVC_COMPRESSION_LEVEL_MAX 6  // Default maximum compression level
+
+#define AVC_COMPRESSION_LEVEL_BALANCED 3
 
 // Memory pool configuration
 #define MEMORY_POOL_CHUNK_SIZE (1024 * 1024)  // 1MB chunks
@@ -95,6 +98,7 @@ static void return_decompressor(struct libdeflate_decompressor* decompressor) {
 
 // Wrapper functions for libdeflate compression
 char* compress_data_libdeflate(const char* data, size_t size, size_t* compressed_size, int level) {
+    if (g_fast_mode) level = 0;
     struct libdeflate_compressor* compressor = get_compressor(level);
     if (!compressor) return NULL;
 

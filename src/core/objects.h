@@ -22,6 +22,9 @@ void free_memory_pool(void);
 // Reset memory pool (reuse chunks instead of freeing)
 void reset_memory_pool(void);
 
+// Enable/disable fast compression mode (level 0)
+void objects_set_fast_mode(int fast);
+
 // Calculate hash of a file using BLAKE3
 int blake3_file_hex(const char* filepath, char hash_out[65]);
 
