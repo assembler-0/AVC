@@ -19,13 +19,13 @@
 ## 🚀 Performance Highlights
 
 ### Benchmark Results (139MB Repository)
-| Operation | AVC | Git | Performance |
-|-----------|-----|-----|-------------|
-| **Init** | 0.001s | 0.001s | ⚡ Equal |
-| **Add** | 0.486s | 1.270s | ⚡ 2.6x faster |
-| **Commit** | 0.053s | 0.244s | 🚀 **4.6x faster** |
-| **Reset** | 0.323s | 0.497s | ⚡ 1.5x faster |
-| **Repository Size** | 67MB | 96MB | 💾 **1.4x smaller** |
+| Operation | AVC    | AVC --fast | Git | Performance               |
+|-----------|--------|------------|-----|---------------------------|
+| **Init** | 0.001s | 0.001      | 0.001s | ⚡ Equal                   |
+| **Add** | 0.486s | 0.089s     | 1.270s | ⚡ Up to **14.3x** faster  |
+| **Commit** | 0.053s | 0.05s      | 0.244s | 🚀 **4.6x faster**        |
+| **Reset** | 0.323s | 0.3s       | 0.497s | ⚡ 1.5x faster             |
+| **Repository Size** | 67MB   | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
 
 *Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
 
@@ -59,17 +59,17 @@
 ## 🔧 Command Reference
 
 ### Core Commands
-| Command | Description | Options |
-|---------|-------------|---------|
-| `avc init` | Initialize new repository | None |
-| `avc add <path>` | Add files/directories to staging | None |
-| `avc commit` | Commit staged changes | `-m <msg>`|
-| `avc status` | Show repository status | None |
-| `avc log` | Show commit history | None |
-| `avc rm <path>` | Remove files/directories | `-r`, `--cached` |
+| Command | Description | Options            |
+|---------|-------------|--------------------|
+| `avc init` | Initialize new repository | None               |
+| `avc add <path>` | Add files/directories to staging | `f`, `--fast`      |
+| `avc commit` | Commit staged changes | `-m <msg>`         |
+| `avc status` | Show repository status | None               |
+| `avc log` | Show commit history | None               |
+| `avc rm <path>` | Remove files/directories | `-r`, `--cached`   |
 | `avc reset <hash>` | Reset to commit | `--hard`, `--clean` |
-| `avc clean` | Remove entire repository | None |
-| `avc version` | Show version information | None |
+| `avc clean` | Remove entire repository | None               |
+| `avc version` | Show version information | None               |
 
 ### Flags Reference
 - `-m <message>` - Commit message
@@ -77,6 +77,7 @@
 - `--cached` - Only remove from staging area
 - `--hard` - Reset working directory
 - `--clean` - Wipe working directory before reset
+- `--fast` - Compression level 0 for speed
 
 ## 🏗️ Architecture
 

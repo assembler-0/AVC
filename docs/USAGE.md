@@ -39,11 +39,12 @@ avc commit -m "Initial commit"
 ### Options Cheat-Sheet
 
 ```
--m <msg>        Commit message
+-m <msg>         Commit message
 -r               Recursive directory operations
 --cached         Remove only from the index, keep working copy
 --hard           Reset working tree as well
 --clean          Wipe working tree before resetting
+- --fast         Compression level 0 for speed
 ```
 
 ---
@@ -53,8 +54,7 @@ avc commit -m "Initial commit"
 ### Large Projects
 ```bash
 # Add entire project except build artefacts (manual exclusion)
-avc add src/ include/
-```
+avc add src/ include/ # add --fast for speed
 
 ### Reset Strategies
 ```bash
