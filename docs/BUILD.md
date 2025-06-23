@@ -11,7 +11,7 @@ AVC is developed primarily on Linux, but it should compile fine on macOS and the
 | Platform | Status                  |
 |----------|-------------------------|
 | Linux (x86-64) | ✅ Supported             |
-| Linux (ARM64)  | ❌ Unsupported (v0.1.5+) |
+| Linux (ARM64)  | ❌ Unsupported (v0.1.0+) |
 | macOS (Intel & Apple-Silicon) | ⚠️ Untested             |
 | Windows (MSYS2) | 🚧 Untested             |
 

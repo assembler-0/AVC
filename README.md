@@ -1,4 +1,4 @@
-# AVC - Archive Version Control v0.1.5 "Arctic Fox" -- EXPERIMENTAL
+# AVC - Archive Version Control v0.2.0 "Cryo Falcon" - EXPERIMENTAL
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](https://github.com/assembler-0/AVC/releases)
