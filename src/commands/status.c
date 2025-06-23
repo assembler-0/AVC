@@ -6,6 +6,7 @@
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
+#include <stdint.h>
 
 // Check if we're in a repository
 int check_repo();
@@ -135,6 +136,56 @@ int file_in_tree_with_hash(const char* tree_hash, const char* filepath, const ch
     return found;
 }
 
+// Simple hash table for tree entries (open addressing, FNV-1a hash)
+#define TREE_TABLE_SIZE 4096
+
+typedef struct {
+    char path[256];
+    char hash[65];
+    int used;
+} tree_entry_t;
+
+static uint32_t fnv1a_hash(const char* s) {
+    uint32_t h = 2166136261u;
+    while (*s) h = (h ^ (unsigned char)*s++) * 16777619u;
+    return h;
+}
+
+// Parse tree content into hash table
+static void build_tree_table(const char* tree_content, size_t tree_size, tree_entry_t* table) {
+    char* content_copy = malloc(tree_size + 1);
+    memcpy(content_copy, tree_content, tree_size);
+    content_copy[tree_size] = '\0';
+    char* line = strtok(content_copy, "\n");
+    while (line) {
+        unsigned int mode; char path[256], hash[65];
+        if (sscanf(line, "%o %255s %64s", &mode, path, hash) == 3) {
+            uint32_t idx = fnv1a_hash(path) % TREE_TABLE_SIZE;
+            for (int i = 0; i < TREE_TABLE_SIZE; ++i) {
+                uint32_t j = (idx + i) % TREE_TABLE_SIZE;
+                if (!table[j].used) {
+                    strcpy(table[j].path, path);
+                    strcpy(table[j].hash, hash);
+                    table[j].used = 1;
+                    break;
+                }
+            }
+        }
+        line = strtok(NULL, "\n");
+    }
+    free(content_copy);
+}
+
+static const char* lookup_tree_hash(tree_entry_t* table, const char* path) {
+    uint32_t idx = fnv1a_hash(path) % TREE_TABLE_SIZE;
+    for (int i = 0; i < TREE_TABLE_SIZE; ++i) {
+        uint32_t j = (idx + i) % TREE_TABLE_SIZE;
+        if (!table[j].used) return NULL;
+        if (strcmp(table[j].path, path) == 0) return table[j].hash;
+    }
+    return NULL;
+}
+
 int cmd_status(int argc, char* argv[]) {
     if (check_repo() == -1) {
         return 1;
@@ -142,7 +193,6 @@ int cmd_status(int argc, char* argv[]) {
 
     printf("On branch main\n\n");
 
-    // Check if index is empty
     struct stat st;
     if (stat(".avc/index", &st) == -1 || st.st_size == 0) {
         printf("No changes to be committed.\n");
@@ -153,41 +203,46 @@ int cmd_status(int argc, char* argv[]) {
     char last_tree_hash[65];
     get_last_commit_tree(last_tree_hash);
 
-    // Read and display staged files
+    // Load and parse last commit's tree ONCE
+    tree_entry_t* tree_table = calloc(TREE_TABLE_SIZE, sizeof(tree_entry_t));
+    if (strlen(last_tree_hash) > 0) {
+        size_t tree_size; char tree_type[16];
+        char* tree_content = load_object(last_tree_hash, &tree_size, tree_type);
+        if (tree_content && strcmp(tree_type, "tree") == 0) {
+            build_tree_table(tree_content, tree_size, tree_table);
+            free(tree_content);
+        }
+    }
+
     FILE* index = fopen(".avc/index", "r");
     if (!index) {
         printf("No changes to be committed.\n");
+        free(tree_table);
         return 0;
     }
 
     char line[1024];
     int has_staged = 0;
-
     printf("Changes to be committed:\n");
     printf("  (use \"avc commit\" to commit)\n\n");
-
     while (fgets(line, sizeof(line), index)) {
-        // Parse index line: hash filepath mode
         char hash[65], filepath[256];
         unsigned int mode;
-
         if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
-            // Check if this file exists in the last commit with the same hash
-            if (file_in_tree_with_hash(last_tree_hash, filepath, hash)) {
+            const char* old_hash = lookup_tree_hash(tree_table, filepath);
+            if (old_hash && strcmp(old_hash, hash) == 0) {
                 printf("  \033[33mmodified:   %s\033[0m\n", filepath);
             } else {
-            printf("  \033[32mnew file:   %s\033[0m\n", filepath);
+                printf("  \033[32mnew file:   %s\033[0m\n", filepath);
             }
             has_staged = 1;
         }
     }
-
     fclose(index);
-
+    free(tree_table);
     if (!has_staged) {
         printf("No changes to be committed.\n");
     }
-
     printf("\n");
     return 0;
 }
