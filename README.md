@@ -6,6 +6,16 @@
 
 **AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
 
+---
+
+## 📚 Documentation
+
+* **Build & Installation:** see [`BUILD.md`](BUILD.md)
+* **Usage Guide:** see [`USAGE.md`](USAGE.md)
+* **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md)
+
+---
+
 ## ⚠️ CRITICAL BUILD WARNING
 
 **MUST ADD `-DCMAKE_BUILD_TYPE=Release` or else it will not compile!**

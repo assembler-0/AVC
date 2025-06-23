@@ -490,22 +490,22 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
                 // Try with larger buffer
                 free(temp_buffer);
                 estimated_size *= 3; // Increased multiplier
-                temp_buffer = malloc(estimated_size + 1);
-                if (temp_buffer) {
+                    temp_buffer = malloc(estimated_size + 1);
+                    if (temp_buffer) {
                     struct libdeflate_decompressor* decompressor2 = get_decompressor();
-                    if (decompressor2) {
+                        if (decompressor2) {
                         enum libdeflate_result result2 = libdeflate_zlib_decompress(decompressor2,
-                            compressed_data, compressed_size, temp_buffer, estimated_size, &actual_size);
+                                compressed_data, compressed_size, temp_buffer, estimated_size, &actual_size);
                         return_decompressor(decompressor2);
-                        
-                        if (result2 == LIBDEFLATE_SUCCESS) {
-                            decompressed = temp_buffer;
-                            actual_decompressed_size = actual_size;
+                            
+                            if (result2 == LIBDEFLATE_SUCCESS) {
+                                decompressed = temp_buffer;
+                                actual_decompressed_size = actual_size;
+                            } else {
+                                free(temp_buffer);
+                            }
                         } else {
                             free(temp_buffer);
-                        }
-                    } else {
-                        free(temp_buffer);
                     }
                 }
             } else {
@@ -536,22 +536,22 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
                     // Try with larger buffer
                     free(temp_buffer);
                     estimated_size *= 3; // Increased multiplier
-                    temp_buffer = malloc(estimated_size + 1);
-                    if (temp_buffer) {
+                        temp_buffer = malloc(estimated_size + 1);
+                        if (temp_buffer) {
                         struct libdeflate_decompressor* decompressor2 = get_decompressor();
-                        if (decompressor2) {
+                            if (decompressor2) {
                             enum libdeflate_result result2 = libdeflate_deflate_decompress(decompressor2,
-                                compressed_data, compressed_size, temp_buffer, estimated_size, &actual_size);
+                                    compressed_data, compressed_size, temp_buffer, estimated_size, &actual_size);
                             return_decompressor(decompressor2);
-                            
-                            if (result2 == LIBDEFLATE_SUCCESS) {
-                                decompressed = temp_buffer;
-                                actual_decompressed_size = actual_size;
+                                
+                                if (result2 == LIBDEFLATE_SUCCESS) {
+                                    decompressed = temp_buffer;
+                                    actual_decompressed_size = actual_size;
+                                } else {
+                                    free(temp_buffer);
+                                }
                             } else {
                                 free(temp_buffer);
-                            }
-                        } else {
-                            free(temp_buffer);
                         }
                     }
                 } else {
@@ -638,7 +638,7 @@ static void cleanup_thread_pool(void) {
         
         free(thread_pool);
         thread_pool = NULL;
-    }
+        }
 }
 
 // Free memory pool (call periodically)

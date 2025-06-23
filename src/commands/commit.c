@@ -234,7 +234,7 @@ int cmd_commit(int argc, char* argv[]) {
         fprintf(stderr, "  -m <message>: Specify commit message\n");
         return 1;
     }
-    
+
     // Get commit message
     char message[1024];
     char* msg = get_message(args);

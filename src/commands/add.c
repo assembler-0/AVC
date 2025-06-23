@@ -59,7 +59,7 @@ int cmd_add(int argc, char* argv[]) {
         return 1;
     }
 
-    // Collect all files to add first
+        // Collect all files to add first
     char** file_paths = NULL;
     size_t file_count = 0, file_cap = 0;
 
@@ -158,7 +158,7 @@ int cmd_add(int argc, char* argv[]) {
     // Clean up memory pool to prevent memory leaks
     reset_memory_pool();
 
-    // free memory
+        // free memory
     for (size_t i=0;i<file_count;++i) free(file_paths[i]);
     free(file_paths);
     free(hashes);

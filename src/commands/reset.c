@@ -172,7 +172,7 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
             line_start = line_end + 1;
             continue;
         }
-
+        
         unsigned int mode;
         char filepath[512], file_hash[65];
 
