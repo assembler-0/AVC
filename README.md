@@ -1,7 +1,7 @@
-# AVC - Archive Version Control v0.2.0 "Cryo Falcon" - EXPERIMENTAL
+# AVC - Archive Version Control v0.2.5 "Cryo Falcon" - EXPERIMENTAL
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
+[![Version](https://img.shields.io/badge/version-0.2.5-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-experimental-orange.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
@@ -19,13 +19,14 @@
 ## 🚀 Performance Highlights
 
 ### Benchmark Results (139MB Repository)
-| Operation | AVC    | AVC --fast | Git | Performance               |
-|-----------|--------|------------|-----|---------------------------|
+| Operation | AVC  | AVC --fast | Git  | Performance               |
+|-----------|------|------------|------|---------------------------|
 | **Init** | 0.001s | 0.001      | 0.001s | ⚡ Equal                   |
-| **Add** | 0.486s | 0.1s       | 1.270s | ⚡ Up to **12.7x** faster  |
-| **Commit** | 0.053s | 0.05s      | 0.244s | 🚀 **4.6x faster**        |
-| **Reset** | 0.323s | 0.3s       | 0.497s | ⚡ 1.5x faster             |
-| **Repository Size** | 67MB   | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
+| **Add** | 0.4s | 0.1s       | 1.1s | ⚡ Up to **12.7x** faster  |
+| **Commit** | 0.053s | 0.006s     | 0.244s | 🚀 **Up to 40.7x faster** |
+| **Reset** | 0.323s | 0.317s     | 0.497s | ⚡ 1.5x faster             |
+| **Repository Size** | 67MB | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
+**Best run*
 
 *Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
 

@@ -20,6 +20,13 @@ typedef struct {
     int entry_len;
 } file_entry_t;
 
+// Comparator for qsort – lexicographic order on filepath
+static int file_entry_cmp(const void *a, const void *b) {
+    const file_entry_t *fa = (const file_entry_t *)a;
+    const file_entry_t *fb = (const file_entry_t *)b;
+    return strcmp(fa->filepath, fb->filepath);
+}
+
 // Configure OpenMP for optimal performance
 static void configure_parallel_processing() {
     // Get number of CPU cores
@@ -88,16 +95,8 @@ int create_tree(char* tree_hash) {
     
     int actual_file_count = idx;
     
-    // Sort entries for consistent tree creation
-    for (int i = 0; i < actual_file_count - 1; i++) {
-        for (int j = i + 1; j < actual_file_count; j++) {
-            if (strcmp(files[i].filepath, files[j].filepath) > 0) {
-                file_entry_t temp = files[i];
-                files[i] = files[j];
-                files[j] = temp;
-            }
-        }
-    }
+    // Sort entries for consistent tree creation (O(N log N))
+    qsort(files, actual_file_count, sizeof(file_entry_t), file_entry_cmp);
     
     // Calculate total size needed for tree content
     size_t total_size = 0;
