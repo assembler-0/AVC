@@ -10,27 +10,11 @@
 
 ## 📚 Documentation
 
-* **Build & Installation:** see [`BUILD.md`](BUILD.md)
-* **Usage Guide:** see [`USAGE.md`](USAGE.md)
-* **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md)
+* **Build & Installation:** see [`BUILD.md`](docs/BUILD.md)
+* **Usage Guide:** see [`USAGE.md`](docs/USAGE.md)
+* **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING)
 
 ---
-
-## ⚠️ CRITICAL BUILD WARNING
-
-**MUST ADD `-DCMAKE_BUILD_TYPE=Release` or else it will not compile!**
-
-```bash
-# CORRECT build command:
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release .. # -DCMAKE_INSTALL_PREFIX=<pathToYourInstallDirectory>
-make
-
-# WRONG (will fail):
-mkdir build && cd build
-cmake ..
-make
-```
 
 ## 🚀 Performance Highlights
 
@@ -71,138 +55,6 @@ make
 - **Repository cleanup** - `clean` command to remove entire repository
 - **Robust error handling** - Detailed error messages and recovery
 - **Large file optimization** - 1MB chunks and 1GB file size support
-
-## 🛠️ Installation
-
-### Prerequisites
-- **C Compiler**: GCC 7+ or Clang 6+
-- **CMake**: 3.20 or higher
-- **OpenSSL**: 1.1.1 or higher
-- **libdeflate**: 1.0 or higher
-- **OpenMP**: For multi-threading support
-
-### Build Instructions
-
-```bash
-# Clone the repository
-git clone https://github.com/assembler-0/AVC.git
-cd AVC-ArchiveVersionControl
-
-# Build the project (RELEASE BUILD REQUIRED)
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-
-# Optional: Install system-wide
-sudo make install
-```
-
-### Quick Test
-```bash
-# Test the installation
-./avc version
-```
-
-## 📖 Usage Guide
-
-### Basic Workflow
-
-#### 1. Initialize Repository
-```bash
-avc init
-# Creates .avc directory with repository structure
-```
-
-#### 2. Add Files
-```bash
-# Add individual files
-avc add file.txt
-
-# Add entire directories (recursive)
-avc add src/
-
-# Add multiple items
-avc add file1.txt file2.txt directory/
-```
-
-#### 3. Check Status
-```bash
-avc status
-# Shows staged files and their status
-```
-
-#### 4. Commit Changes
-```bash
-# Quick commit with message
-avc commit -m "Add new features"
-
-# Interactive commit
-avc commit
-# Enter commit message when prompted
-
-# Maximum speed (no compression)
-avc commit --no-compression -m "Fast commit"
-```
-
-#### 5. View History
-```bash
-avc log
-# Shows commit history with hashes and messages
-```
-
-#### 6. Remove Files
-```bash
-# Remove file from staging and working directory
-avc rm file.txt
-
-# Remove only from staging area
-avc rm --cached file.txt
-
-# Remove directory recursively
-avc rm -r directory/
-```
-
-#### 7. Reset Operations
-```bash
-# Reset to specific commit
-avc reset <commit-hash>
-
-# Hard reset (restore working directory)
-avc reset --hard <commit-hash>
-
-# Clean reset (wipe working directory first)
-avc reset --clean --hard <commit-hash>
-```
-
-#### 8. Repository Management
-```bash
-# Remove entire repository (with confirmation)
-avc clean
-# This will permanently delete the .avc directory
-```
-
-### Advanced Usage
-
-#### Performance Optimization
-```bash
-# Disable compression for maximum speed
-avc commit --no-compression -m "Performance commit"
-
-# Check version and thread count
-avc version
-```
-
-#### Directory Operations
-```bash
-# Add entire project
-avc add .
-
-# Remove directory tree
-avc rm -r build/
-
-# Add with exclusions (manual)
-avc add src/ include/ # Skip build/, .git/, etc.
-```
 
 ## 🔧 Command Reference
 
@@ -248,31 +100,6 @@ avc add src/ include/ # Skip build/, .git/, etc.
 - **Large buffer support** - 1MB compression buffers for big files
 - **Memory pool optimization** - Efficient allocation for large operations
 
-## 🧪 Testing
-
-### Performance Testing
-```bash
-# Test with large repository
-mkdir test-repo && cd test-repo
-avc init
-# Add large files/directories
-avc add .
-avc commit -m "Performance test"
-avc version
-```
-
-### Feature Testing
-```bash
-# Test all commands
-avc init
-echo "test" > file.txt
-avc add file.txt
-avc commit -m "Test commit"
-avc status
-avc log
-avc rm file.txt
-avc reset --hard HEAD
-```
 
 ## 📊 Performance Tips
 
@@ -328,6 +155,6 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 ---
 
-**AVC v0.1.0 "Arctic Fox"** - Fast, efficient, and reliable version control for the modern developer.
+**AVC v0.1.5 "Arctic Fox"** - Fast, efficient, and reliable version control for the modern developer.
 
-*Built with  by Atheria*
+*Built with ❤️ by Atheria*

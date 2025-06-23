@@ -40,7 +40,6 @@ avc commit -m "Initial commit"
 
 ```
 -m <msg>        Commit message
---no-compression  Disable compression (faster commits)
 -r               Recursive directory operations
 --cached         Remove only from the index, keep working copy
 --hard           Reset working tree as well
