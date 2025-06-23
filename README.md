@@ -1,8 +1,8 @@
-# AVC - Archive Version Control v0.1.5 "Arctic Fox"
+# AVC - Archive Version Control v0.1.5 "Arctic Fox" -- EXPERIMENTAL
 
-[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/assembler-0/AVC/releases)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](https://github.com/assembler-0/AVC/releases)
+[![Build Status](https://img.shields.io/badge/build-experimental-orange.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
 
@@ -24,7 +24,7 @@ make
 
 ## 🚀 Performance Highlights
 
-### Benchmark Results (70MB Repository)
+### Benchmark Results (139MB Repository)
 | Operation | AVC | Git | Performance |
 |-----------|-----|-----|-------------|
 | **Init** | 0.001s | 0.001s | ⚡ Equal |
