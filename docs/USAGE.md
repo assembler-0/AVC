@@ -50,12 +50,6 @@ avc commit -m "Initial commit"
 
 ## 3. Advanced Usage
 
-### Performance-Oriented Commits
-```bash
-# Maximum speed – skips compression
-avc commit --no-compression -m "Fast commit"
-```
-
 ### Large Projects
 ```bash
 # Add entire project except build artefacts (manual exclusion)

@@ -63,7 +63,7 @@
 |---------|-------------|---------|
 | `avc init` | Initialize new repository | None |
 | `avc add <path>` | Add files/directories to staging | None |
-| `avc commit` | Commit staged changes | `-m <msg>`, `--no-compression` |
+| `avc commit` | Commit staged changes | `-m <msg>`|
 | `avc status` | Show repository status | None |
 | `avc log` | Show commit history | None |
 | `avc rm <path>` | Remove files/directories | `-r`, `--cached` |
@@ -73,7 +73,6 @@
 
 ### Flags Reference
 - `-m <message>` - Commit message
-- `--no-compression` - Disable compression for speed
 - `-r` - Recursive directory operations
 - `--cached` - Only remove from staging area
 - `--hard` - Reset working directory

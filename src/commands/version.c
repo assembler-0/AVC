@@ -26,14 +26,12 @@ int cmd_version(int argc, char* argv[]) {
     printf("  • Fast libdeflate compression (level 6, optimized)\n");
     printf("  • BLAKE3 hashing (SHA-256 compatible)\n");
     printf("  • Smart compression detection\n");
-    printf("  • Optional compression (--no-compression flag)\n");
     printf("  • Multi-threaded processing\n");
     printf("  • Memory-efficient streaming\n");
     printf("\n");
     printf("Commands:\n");
     printf("  init     - Initialize new repository\n");
     printf("  add      - Add files to staging area (parallel)\n");
-    printf("  commit   - Commit staged changes (parallel, --no-compression)\n");
     printf("  log      - Show commit history\n");
     printf("  status   - Show repository status\n");
     printf("  reset    - Reset to previous commit (--hard, --clean)\n");
