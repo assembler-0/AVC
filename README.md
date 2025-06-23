@@ -1,7 +1,7 @@
 # AVC - Archive Version Control v0.2.0 "Cryo Falcon" - EXPERIMENTAL
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](https://github.com/assembler-0/AVC/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-experimental-orange.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
