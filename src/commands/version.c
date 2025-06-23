@@ -6,7 +6,7 @@
 #include "commands.h"
 
 // Version information
-#define AVC_VERSION "0.1.0"
+#define AVC_VERSION "0.1.5"
 #define AVC_CODENAME "Arctic Fox"
 #define AVC_BUILD_DATE __DATE__
 #define AVC_BUILD_TIME __TIME__
