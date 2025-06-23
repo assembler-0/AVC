@@ -15,8 +15,8 @@
 #include <libdeflate.h>
 
 // Compression constants
-#define AVC_COMPRESSION_LEVEL_MAX 9  // libdeflate supports 1-12, but 9 is more reliable
-#define AVC_COMPRESSION_LEVEL_BALANCED 6
+#define AVC_COMPRESSION_LEVEL_MAX 0  // libdeflate supports 1-12, but 9 is more reliable
+#define AVC_COMPRESSION_LEVEL_BALANCED 0
 
 // Memory pool configuration
 #define MEMORY_POOL_CHUNK_SIZE (1024 * 1024)  // 1MB chunks
