@@ -15,6 +15,7 @@
 #include <blake3/blake3.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 
 // Git object types
@@ -62,6 +63,13 @@ static void sha1_to_blake3(const char* sha1_hash, char* blake3_hash) {
         sprintf(blake3_hash + i * 2, "%02x", digest[i]);
     }
     blake3_hash[64] = '\0';
+}
+
+// Helper: check if a Git object already exists
+static int git_object_exists(const char* git_hash) {
+    char path[512];
+    snprintf(path, sizeof(path), ".git/objects/%c%c/%s", git_hash[0], git_hash[1], git_hash + 2);
+    return access(path, F_OK) == 0;
 }
 
 // Convert ISO 8601 datetime ("YYYY-MM-DD HH:MM:SS") to epoch seconds (UTC)
@@ -278,9 +286,21 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
             if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
                 printf("Processing entry: %o %s %s\n", mode, filepath, avc_hash_entry);
                 
-                // Convert BLAKE3 hash to SHA-1
+                // First ensure the pointed-to object exists inside .git
                 char git_hash_entry[41];
-                blake3_to_sha1(avc_hash_entry, git_hash_entry);
+                if (mode == 040000) {
+                    // sub-tree
+                    if (convert_avc_tree_to_git(avc_hash_entry, git_hash_entry) != 0) {
+                        printf("Failed to convert sub-tree %s\n", avc_hash_entry);
+                        continue;
+                    }
+                } else {
+                    // treat as blob (regular file or executable, symlink, etc.)
+                    if (convert_avc_blob_to_git(avc_hash_entry, git_hash_entry) != 0) {
+                        printf("Failed to convert blob %s\n", avc_hash_entry);
+                        continue;
+                    }
+                }
                 
                 // Convert hex hash to binary
                 unsigned char hash_binary[20];
@@ -323,6 +343,13 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
 
 // Convert AVC commit to Git commit
 static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
+    // Skip work if Git object already exists
+    char candidate_git_hash[41];
+    blake3_to_sha1(avc_hash, candidate_git_hash);
+    if (git_object_exists(candidate_git_hash)) {
+        if (git_hash_out) strcpy(git_hash_out, candidate_git_hash);
+        return 0;
+    }
     // Load AVC commit object
     size_t commit_size;
     char commit_type[16];
@@ -347,7 +374,8 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
     char* git_commit_content = malloc(commit_size * 2);
     size_t git_commit_offset = 0;
     
-    char* line = strtok(commit_copy, "\n");
+    char *saveptr;
+    char* line = strtok_r(commit_copy, "\n", &saveptr);
     while (line) {
         if (strncmp(line, "tree ", 5) == 0) {
             char avc_tree_hash[65];
@@ -371,7 +399,14 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
             char avc_parent_hash[65];
             if (sscanf(line, "parent %64s", avc_parent_hash) == 1) {
                 char git_parent_hash[41];
-                blake3_to_sha1(avc_parent_hash, git_parent_hash);
+                // Recursively ensure parent commit is present
+                if (convert_avc_commit_to_git(avc_parent_hash, git_parent_hash) != 0) {
+                    printf("Failed to convert parent commit %s\n", avc_parent_hash);
+                    free(commit_copy);
+                    free(git_commit_content);
+                    free(commit_content);
+                    return -1;
+                }
                 git_commit_offset += snprintf(git_commit_content + git_commit_offset,
                                             commit_size * 2 - git_commit_offset,
                                             "parent %s\n", git_parent_hash);
@@ -452,11 +487,12 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
                                         "%s\n", line);
         }
         
-        line = strtok(NULL, "\n");
+        line = strtok_r(NULL, "\n", &saveptr);
     }
     
     printf("Git commit content:\n%s\n", git_commit_content);
     
+    // Compute SHA-1 of full commit content before storing (needed for recursion termination)
     // Store as Git commit
     int result = store_git_object("commit", git_commit_content, git_commit_offset, git_hash_out);
     
