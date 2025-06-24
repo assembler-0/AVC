@@ -63,6 +63,7 @@ add_library(avc_core STATIC
         src/commands/status.c
         src/commands/version.c
         src/commands/clean.c
+        agcl/agcl.c
 )
 
 # Set library properties
@@ -72,6 +73,7 @@ target_include_directories(avc_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core
         ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
         ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
+        ${CMAKE_CURRENT_SOURCE_DIR}/agcl
         ${OPENSSL_INCLUDE_DIR}
         ${LIBDEFLATE_INCLUDE_DIRS}
 )
@@ -80,6 +82,9 @@ target_link_libraries(avc_core PUBLIC
         ${LIBDEFLATE_LIBRARIES}
         OpenMP::OpenMP_C
         blake3
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        z
 )
 target_compile_definitions(blake3 PUBLIC BLAKE3_NO_AVX512=1)
 target_compile_definitions(avc_core PRIVATE

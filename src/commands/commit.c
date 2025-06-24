@@ -280,15 +280,24 @@ int cmd_commit(int argc, char* argv[]) {
     time_t now = time(NULL);
     char* author = getenv("USER");
     if (!author) author = "unknown";
+    
+    // Get email from environment or use default
+    char* email = getenv("EMAIL");
+    if (!email) email = "user@example.com";
+
+    // Format date as YYYY-MM-DD HH:MM:SS (Git format)
+    struct tm* tm_info = localtime(&now);
+    char date_str[64];
+    strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M:%S", tm_info);
 
     if (strlen(parent_hash) > 0) {
         snprintf(commit_content, sizeof(commit_content),
-                "tree %s\nparent %s\nauthor %s %ld\ncommitter %s %ld\n\n%s\n",
-                tree_hash, parent_hash, author, now, author, now, message);
+                "tree %s\nparent %s\nauthor %s <%s> %s +0000\ncommitter %s <%s> %s +0000\n\n%s\n",
+                tree_hash, parent_hash, author, email, date_str, author, email, date_str, message);
     } else {
         snprintf(commit_content, sizeof(commit_content),
-                "tree %s\nauthor %s %ld\ncommitter %s %ld\n\n%s\n",
-                tree_hash, author, now, author, now, message);
+                "tree %s\nauthor %s <%s> %s +0000\ncommitter %s <%s> %s +0000\n\n%s\n",
+                tree_hash, author, email, date_str, author, email, date_str, message);
     }
 
     // Generate commit hash and store object
