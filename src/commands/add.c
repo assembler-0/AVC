@@ -12,19 +12,30 @@
 #include <omp.h>
 #include <stdlib.h>
 
+static int should_skip_path(const char* path) {
+    // Skip .git or .avc anywhere in the path
+    if (strstr(path, "/.git") != NULL || strstr(path, "/.avc") != NULL) return 1;
+    if (strcmp(path, ".git") == 0 || strcmp(path, ".avc") == 0) return 1;
+    // Skip absolute paths
+    if (path[0] == '/') return 1;
+    // Skip parent directory references
+    if (strstr(path, "..") != NULL) return 1;
+    return 0;
+}
+
 static void collect_files(const char* path, char*** paths, size_t* count, size_t* cap) {
+    if (should_skip_path(path)) return;
     struct stat st;
     if (stat(path, &st) == -1) return;
     if (S_ISDIR(st.st_mode)) {
         DIR* d = opendir(path);
         if (!d) return;
-        // Skip internal .avc directory
-        if (strcmp(path, ".avc") == 0 || strstr(path, "/.avc") != NULL) { closedir(d); return; }
         struct dirent* e;
         while ((e = readdir(d))) {
-            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0 || strcmp(e->d_name, ".avc") == 0) continue;
+            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
             char child[1024];
             snprintf(child, sizeof(child), "%s/%s", path, e->d_name);
+            if (should_skip_path(child)) continue;
             collect_files(child, paths, count, cap);
         }
         closedir(d);

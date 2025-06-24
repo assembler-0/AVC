@@ -65,11 +65,39 @@ static void sha1_to_blake3(const char* sha1_hash, char* blake3_hash) {
     blake3_hash[64] = '\0';
 }
 
+// Path to mapping file that stores lines: "<avc_hash> <git_hash>\n"
+#define AGCL_MAP_PATH ".git/avc-map"
+
+// Forward declarations
+static int read_mapping(const char* avc_hash, char* git_hash_out);
+static int append_mapping(const char* avc_hash, const char* git_hash);
+
 // Helper: check if a Git object already exists
 static int git_object_exists(const char* git_hash) {
     char path[512];
     snprintf(path, sizeof(path), ".git/objects/%c%c/%s", git_hash[0], git_hash[1], git_hash + 2);
     return access(path, F_OK) == 0;
+}
+
+// Read mapping; returns 0 if entry found
+static int read_mapping(const char* avc_hash, char* git_hash_out) {
+    FILE* fp = fopen(AGCL_MAP_PATH, "r");
+    if (!fp) return -1;
+    char a[65], g[41];
+    int found = -1;
+    while (fscanf(fp, "%64s %40s", a, g) == 2) {
+        if (strcmp(a, avc_hash) == 0) { strcpy(git_hash_out, g); found = 0; break; }
+    }
+    fclose(fp);
+    return found;
+}
+
+static int append_mapping(const char* avc_hash, const char* git_hash) {
+    FILE* fp = fopen(AGCL_MAP_PATH, "a");
+    if (!fp) return -1;
+    fprintf(fp, "%s %s\n", avc_hash, git_hash);
+    fclose(fp);
+    return 0;
 }
 
 // Convert ISO 8601 datetime ("YYYY-MM-DD HH:MM:SS") to epoch seconds (UTC)
@@ -184,6 +212,9 @@ static int store_git_object(const char* type, const char* content, size_t size, 
 
 // Convert AVC blob to Git blob
 static int convert_avc_blob_to_git(const char* avc_hash, char* git_hash_out) {
+    if (read_mapping(avc_hash, git_hash_out) == 0 && git_object_exists(git_hash_out)) {
+        return 0;
+    }
     // Load AVC blob object
     size_t blob_size;
     char blob_type[16];
@@ -197,12 +228,17 @@ static int convert_avc_blob_to_git(const char* avc_hash, char* git_hash_out) {
     // Store as Git blob
     int result = store_git_object("blob", blob_content, blob_size, git_hash_out);
     free(blob_content);
-    
+    if (result == 0) {
+        append_mapping(avc_hash, git_hash_out);
+    }
     return result;
 }
 
 // Convert AVC tree to Git tree
 static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
+    if (read_mapping(avc_hash, git_hash_out) == 0 && git_object_exists(git_hash_out)) {
+        return 0;
+    }
     // Load AVC tree object
     size_t tree_size;
     char tree_type[16];
@@ -284,9 +320,7 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
             char filepath[256], avc_hash_entry[65];
             
             if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
-                printf("Processing entry: %o %s %s\n", mode, filepath, avc_hash_entry);
                 
-                // First ensure the pointed-to object exists inside .git
                 char git_hash_entry[41];
                 if (mode == 040000) {
                     // sub-tree
@@ -310,18 +344,12 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
                 }
                 
                 // Format: "mode filename\0hash"
-                int mode_len = snprintf(git_tree_content + git_tree_offset, 
-                                       total_size - git_tree_offset,
-                                       "%06o %s", mode, filepath);
-                git_tree_offset += mode_len;
-                
-                // Add null terminator
-                git_tree_content[git_tree_offset] = '\0';
-                git_tree_offset++;
-                
-                // Add binary hash
+                int len = sprintf(git_tree_content + git_tree_offset, "%o %s", mode, filepath);
+                git_tree_offset += len;
+                git_tree_content[git_tree_offset++] = '\0';
                 memcpy(git_tree_content + git_tree_offset, hash_binary, 20);
                 git_tree_offset += 20;
+
             }
         }
         
@@ -332,6 +360,9 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
     
     // Store as Git tree
     int result = store_git_object("tree", git_tree_content, git_tree_offset, git_hash_out);
+    if (result == 0) {
+        append_mapping(avc_hash, git_hash_out);
+    }
     
     free(work_copy);
     free(tree_copy);
@@ -343,11 +374,9 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
 
 // Convert AVC commit to Git commit
 static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
-    // Skip work if Git object already exists
-    char candidate_git_hash[41];
-    blake3_to_sha1(avc_hash, candidate_git_hash);
-    if (git_object_exists(candidate_git_hash)) {
-        if (git_hash_out) strcpy(git_hash_out, candidate_git_hash);
+    char mapped_hash[41];
+    if (read_mapping(avc_hash, mapped_hash) == 0 && git_object_exists(mapped_hash)) {
+        if (git_hash_out) strcpy(git_hash_out, mapped_hash);
         return 0;
     }
     // Load AVC commit object
@@ -495,6 +524,9 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
     // Compute SHA-1 of full commit content before storing (needed for recursion termination)
     // Store as Git commit
     int result = store_git_object("commit", git_commit_content, git_commit_offset, git_hash_out);
+    if (result == 0) {
+        append_mapping(avc_hash, git_hash_out);
+    }
     
     free(commit_copy);
     free(git_commit_content);
