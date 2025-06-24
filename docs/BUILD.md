@@ -10,10 +10,10 @@ AVC is developed primarily on Linux, but it should compile fine on macOS and the
 
 | Platform | Status                  |
 |----------|-------------------------|
-| Linux (x86-64) | ✅ Supported             |
-| Linux (ARM64)  | ❌ Unsupported (v0.1.0+) |
-| macOS (Intel & Apple-Silicon) | ⚠️ Untested             |
-| Windows (MSYS2) | 🚧 Untested             |
+| Linux (x86-64) | ✅ Fully Supported       |
+| Linux (ARM64)  | ✅ Supported (portable build) |
+| macOS (Intel & Apple-Silicon) | ✅ Supported (portable build) |
+| Windows (MSYS2) | ⚠️ Untested             |
 
 ---
 
@@ -59,22 +59,33 @@ brew install cmake openssl libdeflate llvm
 
 Always create a **separate build directory** and remember to build in **Release** mode – optimisation is required for some compiler intrinsics.
 
+### Standard Build (Native Optimizations)
 ```bash
 # Clone
- git clone https://github.com/assembler-0/AVC.git
- cd AVC-ArchiveVersionControl
+git clone https://github.com/assembler-0/AVC.git
+cd AVC-ArchiveVersionControl
 
-# Configure & build (Release)
- mkdir build && cd build
- cmake -DCMAKE_BUILD_TYPE=Release ..  # -DCMAKE_INSTALL_PREFIX=<custom/path>
- make -j$(nproc)
+# Configure & build (Release with native optimizations)
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
 
-# Optionally run tests
- make test
-
-# Optional: install system-wide (requires root privileges)
- sudo make install
+# Optional: install system-wide
+sudo make install
 ```
+
+### Portable Build (ARM/Cross-Platform)
+```bash
+# For ARM, older CPUs, or cross-compilation
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DAVC_PORTABLE_BUILD=ON ..
+make -j$(nproc)
+sudo make install
+```
+
+### Build Options
+- **`-DAVC_PORTABLE_BUILD=ON`** - Disable native CPU optimizations for better portability
+- **`-DCMAKE_INSTALL_PREFIX=/custom/path`** - Custom installation directory
 
 ### Quick Sanity Check
 ```bash
@@ -88,8 +99,20 @@ Always create a **separate build directory** and remember to build in **Release*
 For development enable sanitizers and extra warnings:
 ```bash
 mkdir build-debug && cd build-debug
-cmake -DCMAKE_BUILD_TYPE=Debug -DAVC_ENABLE_SANITIZERS=ON ..
+cmake -DCMAKE_BUILD_TYPE=Debug ..
 make -j$(nproc)
+```
+
+### Testing AGCL (Git Compatibility)
+```bash
+# After building, test AGCL functionality
+./avc init
+echo "test" > test.txt
+./avc add test.txt
+./avc commit -m "Test commit"
+./avc agcl git-init
+./avc agcl sync-to-git
+./avc agcl verify-git
 ```
 
 ---
@@ -108,6 +131,8 @@ CMake generates `install_manifest.txt` in the build directory with the list of i
 
 * **Missing `<omp.h>`** – your compiler was built without OpenMP support. Install `libgomp` / `clang-openmp` or rebuild the compiler with OpenMP enabled.
 * **Undefined reference to `BLAKE3`** – ensure the bundled BLAKE3 sources are compiled; delete the build directory and re-run CMake.
-* **Linker errors on older glibc** – try building with `-DUSE_BUNDLED_LZMA=ON` to avoid incompatible system libraries.
+* **`march=native` errors on ARM** – use portable build: `cmake -DAVC_PORTABLE_BUILD=ON ..`
+* **AGCL sync fails** – ensure you have both AVC and Git repositories initialized
+* **GitHub 404 after push** – run `avc agcl verify-git` to check Git object validity
 
 If you encounter problems that are not covered here, please open a GitHub issue. Pull requests with fixes are very welcome!

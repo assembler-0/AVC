@@ -1,10 +1,16 @@
-# AVC Git Compatibility Layer (AGCL)
+# AGCL Usage Guide
 
-The AVC Git Compatibility Layer allows you to use AVC for fast local operations while maintaining Git compatibility for remote operations and collaboration.
+**AGCL** (AVC Git Compatibility Layer) enables seamless integration between AVC and Git, allowing you to push AVC repositories directly to GitHub, GitLab, and other Git hosting services.
 
-## 🚀 Quick Start
+## Overview
 
-### 1. Initialize Git alongside AVC
+AGCL converts between two formats:
+- **AVC Format**: BLAKE3 hashes (64-char) + libdeflate compression
+- **Git Format**: SHA-1 hashes (40-char) + zlib compression
+
+## Complete Workflow
+
+### 1. Initialize Repositories
 ```bash
 # Initialize AVC repository
 avc init
@@ -13,164 +19,203 @@ avc init
 avc agcl git-init
 ```
 
-### 2. Work with AVC (fast local operations)
+### 2. Work with Files (AVC)
 ```bash
-# Add files (fast with AVC)
+# Add files incrementally
+avc add file1.txt
+avc add file2.txt
+# Or add all files
 avc add .
 
-# Commit (fast with AVC)
-avc commit -m "Initial commit"
+# Commit changes
+avc commit -m "Your commit message"
 
-# Check status (fast with AVC)
+# Check status
 avc status
 ```
 
-### 3. Sync to Git for remote operations
+### 3. Convert to Git Format
 ```bash
-# Sync AVC objects to Git format
+# Convert AVC objects to Git format
 avc agcl sync-to-git
 
-# Now you can use Git commands
-git push origin main
-git pull origin main
+# Verify conversion (optional)
+avc agcl verify-git
 ```
 
-## 🔄 Workflow
-
-### Local Development (AVC)
+### 4. Push to GitHub
 ```bash
-avc add <files>      # Fast staging
-avc commit -m "msg"  # Fast commits
-avc status          # Fast status
-avc log             # Fast history
+# Add remote repository
+git remote add origin https://github.com/username/repo.git
+
+# Push to GitHub
+git push -u origin main
 ```
 
-### Remote Operations (Git)
-```bash
-avc agcl sync-to-git  # Convert AVC → Git
-git push origin main  # Push to remote
-git pull origin main  # Pull from remote
-```
-
-## 📋 Commands
+## AGCL Commands
 
 ### `avc agcl git-init`
 Initializes a Git repository alongside your AVC repository.
 
-**Creates:**
+**What it creates:**
 - `.git/` directory structure
-- `.git/config` with basic configuration
 - `.git/HEAD` pointing to `refs/heads/main`
+- `.git/config` with proper Git configuration
+- `.git/objects/` for Git objects
+- `.git/refs/` for Git references
 
 ### `avc agcl sync-to-git`
-Converts AVC objects to Git format and updates Git HEAD.
+Converts AVC objects (commits, trees, blobs) to Git format.
 
-**Converts:**
-- AVC blobs → Git blobs (BLAKE3 → SHA-1)
-- AVC trees → Git trees (with converted hashes)
-- AVC commits → Git commits (with converted hashes)
+**Conversion process:**
+1. **Commits**: Converts BLAKE3 commit hashes to SHA-1
+2. **Trees**: Converts directory structures with proper Git tree format
+3. **Blobs**: Converts file contents with SHA-1 hashing
+4. **References**: Updates `.git/refs/heads/main` with latest commit
 
-### `avc agcl sync-from-git` (Coming Soon)
-Converts Git objects to AVC format.
+**Hash mapping:**
+- Maintains a mapping file (`.git/avc-map`) between AVC and Git hashes
+- Ensures consistent conversion across multiple syncs
 
-### `avc agcl migrate` (Coming Soon)
-Converts an existing Git repository to AVC format.
+### `avc agcl verify-git`
+Verifies that the Git repository is in a valid state.
 
-## 🔧 Technical Details
+**Checks performed:**
+- Git objects exist and are accessible
+- Commit references are valid
+- Repository structure is complete
+- Objects pass `git fsck` validation
 
-### Object Format Compatibility
-Both AVC and Git use the same object format:
+## Troubleshooting
+
+### Issue: Empty commits after sync
+**Cause**: Commit message parsing failed
+**Solution**: Ensure commit messages are properly formatted
+
+### Issue: Git shows files as deleted
+**Cause**: Working directory and Git index are out of sync
+**Solution**: This is normal after AGCL sync - the Git repository contains the objects but working directory shows AVC files
+
+### Issue: GitHub shows 404 after push
+**Cause**: Invalid Git objects or empty repository
+**Solution**: 
+1. Run `avc agcl verify-git`
+2. Check `git log --oneline` shows commits
+3. Ensure commit messages are not empty
+
+### Issue: ARM/cross-platform build fails
+**Cause**: Native optimizations not supported
+**Solution**: Use portable build:
+```bash
+cmake -DAVC_PORTABLE_BUILD=ON ..
 ```
-"type size\0content"
+
+## Advanced Usage
+
+### Multiple Commits
+```bash
+# Work normally with AVC
+avc add file1.txt
+avc commit -m "Add file1"
+
+avc add file2.txt  
+avc commit -m "Add file2"
+
+# Sync all commits at once
+avc agcl sync-to-git
+
+# Push entire history
+git push origin main
 ```
+
+### Incremental Sync
+AGCL is designed to handle incremental syncs efficiently:
+- Only new commits are converted
+- Existing Git objects are reused
+- Hash mapping prevents duplicate work
+
+### Repository Maintenance
+```bash
+# Clean up AVC repository
+avc clean
+
+# Remove Git repository
+rm -rf .git
+
+# Start fresh
+avc agcl git-init
+```
+
+## Technical Details
 
 ### Hash Conversion
-- **AVC**: BLAKE3 (64 characters)
-- **Git**: SHA-1 (40 characters)
-- **Conversion**: BLAKE3 hash → SHA-1 hash mapping
+- **AVC → Git**: BLAKE3 (64-char) converted to SHA-1 (40-char)
+- **Mapping**: Stored in `.git/avc-map` for consistency
+- **Collision Handling**: Uses cryptographic hashing to prevent conflicts
 
-### Compression
-- **AVC**: libdeflate (fast, efficient)
-- **Git**: zlib (standard, compatible)
-- **Conversion**: Automatic compression format conversion
+### Object Format Conversion
+- **Blobs**: Direct content conversion with new hash
+- **Trees**: Binary format conversion with proper Git tree structure
+- **Commits**: Header parsing and timestamp conversion
 
-### Storage Structure
+### Compression Conversion
+- **AVC**: libdeflate compression
+- **Git**: zlib compression
+- **Automatic**: AGCL handles compression format differences
+
+## Best Practices
+
+1. **Always verify**: Run `avc agcl verify-git` before pushing
+2. **Incremental workflow**: Add files individually for better tracking
+3. **Meaningful commits**: Use descriptive commit messages
+4. **Regular sync**: Sync to Git format regularly to catch issues early
+5. **Backup important work**: AGCL is stable but backup critical repositories
+
+## Limitations
+
+- **One-way sync**: Currently only AVC → Git (Git → AVC planned)
+- **Hash mapping**: Requires mapping file for consistency
+- **Performance**: Large repositories may take time to convert initially
+- **Git features**: Some advanced Git features not supported in reverse direction
+
+## Examples
+
+### Basic Project
+```bash
+# Setup
+avc init
+avc agcl git-init
+
+# Work
+echo "Hello World" > hello.txt
+avc add hello.txt
+avc commit -m "Initial commit"
+
+# Publish
+avc agcl sync-to-git
+git remote add origin https://github.com/user/project.git
+git push -u origin main
 ```
-.avc/objects/ab/cdef...  # AVC objects (BLAKE3)
-.git/objects/ab/cdef...  # Git objects (SHA-1)
+
+### Multi-file Project
+```bash
+# Setup
+avc init
+avc agcl git-init
+
+# Add files incrementally
+avc add README.md
+avc add src/main.c
+avc add Makefile
+avc commit -m "Add project files"
+
+# More changes
+avc add tests/test.c
+avc commit -m "Add tests"
+
+# Publish all
+avc agcl sync-to-git
+git push origin main
 ```
 
-## 🎯 Use Cases
-
-### 1. **Fast Local Development**
-Use AVC for all local operations:
-- Faster commits and status checks
-- Better compression with libdeflate
-- Optimized for large repositories
-
-### 2. **Git Ecosystem Integration**
-Use Git for remote operations:
-- GitHub, GitLab, Bitbucket compatibility
-- Standard Git tools and workflows
-- Team collaboration
-
-### 3. **Migration Path**
-- Convert existing Git repos to AVC
-- Maintain Git compatibility
-- Gradual migration strategy
-
-## 🔮 Future Features
-
-### Planned Commands
-- `avc agcl sync-from-git` - Sync Git → AVC
-- `avc agcl migrate` - Convert Git repo to AVC
-- `avc agcl export` - Export AVC repo as Git
-- `avc agcl import` - Import Git repo to AVC
-
-### Advanced Features
-- **Bidirectional sync** - Automatic AVC ↔ Git conversion
-- **Hash mapping table** - Persistent BLAKE3 ↔ SHA-1 mapping
-- **Incremental sync** - Only sync changed objects
-- **Conflict resolution** - Handle divergent histories
-
-## 🛠️ Implementation Notes
-
-### Hash Conversion Strategy
-The current implementation uses a simple approach:
-1. **BLAKE3 → SHA-1**: Hash the BLAKE3 hash with SHA-1
-2. **SHA-1 → BLAKE3**: Hash the SHA-1 hash with BLAKE3
-
-For production use, consider:
-- **Persistent mapping table** for consistent conversions
-- **Content-based mapping** for better deduplication
-- **Collision detection** and resolution
-
-### Performance Considerations
-- **Lazy conversion**: Only convert when needed
-- **Caching**: Cache conversion results
-- **Batch operations**: Convert multiple objects at once
-
-## 🚨 Limitations
-
-### Current Limitations
-1. **Hash conversion** is not perfect (potential collisions)
-2. **No bidirectional sync** yet
-3. **No conflict resolution** for divergent histories
-4. **Manual sync** required (not automatic)
-
-### Workarounds
-1. **Use AVC for local work** - avoid frequent conversions
-2. **Sync before Git operations** - ensure compatibility
-3. **Test thoroughly** - verify conversions work correctly
-
-## 📞 Support
-
-For issues with AGCL:
-1. Check that both AVC and Git repos are initialized
-2. Verify object format compatibility
-3. Test with simple repositories first
-4. Report issues with conversion examples
-
----
-
-**AGCL** - The bridge between AVC's speed and Git's ecosystem! 🚀 
+AGCL makes AVC the first version control system with native GitHub compatibility while maintaining the performance benefits of BLAKE3 and libdeflate compression.

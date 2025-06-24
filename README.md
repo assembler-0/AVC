@@ -1,10 +1,10 @@
-# AVC - Archive Version Control v0.2.6 "Cryo Falcon" - EXPERIMENTAL
+# AVC - Archive Version Control v0.3.0 "Git Bridge" - STABLE
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.6-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
-[![Build Status](https://img.shields.io/badge/build-experimental-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
+[![Build Status](https://img.shields.io/badge/build-stable-green.svg)]()
 
-**AVC** (Archive Version Control) is a high-performance, Git-inspired version control system written in C. Designed for speed, efficiency, and simplicity, AVC combines the familiar Git workflow with modern optimizations including multi-threaded operations and intelligent compression.
+**AVC** (Archive Version Control) is a high-performance version control system with **Git compatibility** through AGCL (AVC Git Compatibility Layer). Push AVC repositories directly to GitHub while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
 
 ---
 
@@ -12,6 +12,7 @@
 
 * **Build & Installation:** see [`BUILD.md`](docs/BUILD.md)
 * **Usage Guide:** see [`USAGE.md`](docs/USAGE.md)
+* **AGCL Guide:** see [`AGCL_USAGE.md`](docs/AGCL_USAGE.md)
 * **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING)
 
 ---
@@ -34,11 +35,12 @@
 ## ✨ Key Features
 
 ### 🔧 Core Functionality
+- **Git Compatibility (AGCL)** - Push AVC repos directly to GitHub/GitLab
 - **BLAKE3 content addressing** - Fast, secure, collision-resistant hashing
-- **Git-like workflow** - Familiar commands and concepts
+- **Incremental staging** - `avc add file1.txt file2.txt` works properly
 - **Multi-threaded operations** - Parallel processing for speed
 - **Intelligent compression** - Smart libdeflate compression with size optimization
-- **Directory support** - Full recursive directory operations
+- **Cross-platform builds** - ARM/portable build support
 - **Large file support** - Handles files up to 1GB with optimized memory management
 
 ### 🚀 Performance Optimizations
@@ -73,6 +75,13 @@
 | `avc clean` | Remove entire repository | None               |
 | `avc version` | Show version information | None               |
 
+### AGCL Commands (Git Compatibility)
+| Command | Description | Purpose            |
+|---------|-------------|--------------------|
+| `avc agcl git-init` | Initialize Git repo alongside AVC | Setup Git compatibility |
+| `avc agcl sync-to-git` | Convert AVC objects to Git format | Prepare for GitHub push |
+| `avc agcl verify-git` | Verify Git repository state | Debug conversion issues |
+
 ### Flags Reference
 - `-m <message>` - Commit message
 - `-r` - Recursive directory operations
@@ -82,6 +91,12 @@
 - `--fast` - Compression level 0 for speed
 
 ## 🏗️ Architecture
+
+### Dual Format Support
+- **AVC Format**: BLAKE3 hashes (64-char) + libdeflate compression
+- **Git Format**: SHA-1 hashes (40-char) + zlib compression  
+- **AGCL Bridge**: Converts between formats seamlessly
+- **GitHub Compatible**: Push AVC repos to any Git hosting service
 
 ### Object Storage
 - **BLAKE3 hashing** for fast, secure content addressing
@@ -129,13 +144,19 @@ We welcome contributions! Please see our contributing guidelines:
 
 ### Development Setup
 ```bash
+# Standard build (native optimizations)
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
+
+# Portable build (ARM/cross-platform)
+cmake -DCMAKE_BUILD_TYPE=Release -DAVC_PORTABLE_BUILD=ON ..
+make -j$(nproc)
+
 # Debug build with sanitizers
 mkdir build-debug && cd build-debug
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 make
-
-# Run tests
-make test
 ```
 
 ## 📄 License
@@ -157,6 +178,6 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 ---
 
-**AVC v0.1.5 "Arctic Fox"** - Fast, efficient, and reliable version control for the modern developer.
+**AVC v0.3.0 "Git Bridge"** - The first version control system with native GitHub compatibility.
 
 *Built with ❤️ by Atheria*

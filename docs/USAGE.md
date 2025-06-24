@@ -1,33 +1,54 @@
 # USAGE GUIDE
 
-This document covers the day-to-day workflow with **AVC**.  If you are looking for build instructions, see [`BUILD.md`](BUILD.md).
+This document covers the day-to-day workflow with **AVC** and **AGCL** (Git compatibility). For build instructions, see [`BUILD.md`](BUILD.md). For detailed AGCL usage, see [`AGCL_USAGE.md`](AGCL_USAGE.md).
 
 ---
 
 ## 1. Quick Start
 
+### AVC Only (Local Development)
 ```bash
-# Initialise a repository in the current directory
+# Initialize repository
 avc init
 
-# Stage files or directories
-avc add README.md src/
+# Add files incrementally
+avc add README.md
+avc add src/main.c
+# Or add all
+avc add .
 
-# Inspect what is staged
+# Check status
 avc status
 
-# Commit your work
+# Commit changes
 avc commit -m "Initial commit"
+```
+
+### AVC + GitHub (Full Workflow)
+```bash
+# Initialize both AVC and Git
+avc init
+avc agcl git-init
+
+# Work with AVC
+avc add .
+avc commit -m "Initial commit"
+
+# Convert to Git and push
+avc agcl sync-to-git
+git remote add origin https://github.com/user/repo.git
+git push -u origin main
 ```
 
 ---
 
 ## 2. Basic Commands
 
+### Core AVC Commands
 | Command | Description |
 |---------|-------------|
 | `avc init` | Create a new repository (`.avc/`) |
-| `avc add <path>` | Stage files / directories recursively |
+| `avc add <path>` | Stage files / directories (incremental) |
 | `avc status` | Show staged changes |
 | `avc commit [-m <msg>]` | Commit staged changes |
 | `avc log` | View commit history |
@@ -35,6 +56,13 @@ avc commit -m "Initial commit"
 | `avc reset <hash>` | Reset to a previous commit |
 | `avc clean` | Delete the entire repository |
 | `avc version` | Display version & build info |
+
+### AGCL Commands (Git Compatibility)
+| Command | Description |
+|---------|-------------|
+| `avc agcl git-init` | Initialize Git repo alongside AVC |
+| `avc agcl sync-to-git` | Convert AVC objects to Git format |
+| `avc agcl verify-git` | Verify Git repository state |
 
 ### Options Cheat-Sheet
 
@@ -51,10 +79,40 @@ avc commit -m "Initial commit"
 
 ## 3. Advanced Usage
 
+### Incremental File Management
+```bash
+# Add files one by one (properly supported)
+avc add file1.txt
+avc add file2.txt
+avc add src/main.c
+
+# Files accumulate in staging area
+avc status  # Shows all staged files
+
+# Commit all staged files
+avc commit -m "Add multiple files"
+```
+
 ### Large Projects
 ```bash
-# Add entire project except build artefacts (manual exclusion)
-avc add src/ include/ # add --fast for speed
+# Add entire project except build artifacts
+avc add src/ include/ docs/
+# Use --fast for speed on large projects
+avc add --fast large-dataset/
+```
+
+### GitHub Integration
+```bash
+# After making commits in AVC
+avc agcl sync-to-git
+
+# Verify before pushing
+avc agcl verify-git
+git log --oneline  # Should show your commits
+
+# Push to GitHub
+git push origin main
+```
 
 ### Reset Strategies
 ```bash
@@ -69,17 +127,46 @@ avc reset --clean --hard <hash>
 
 ## 4. Tips & Tricks
 
-* **Multi-threading** – AVC automatically detects CPU cores.  Ensure you have enough RAM when committing very large data sets.
-* **Compression** – For archiving or storage-space sensitive workflows, keep compression enabled (default).
-* **Hardware** – SSDs and plenty of RAM noticeably speed up operations.
+* **Incremental Adding** – `avc add file1.txt file2.txt` works properly, files accumulate in staging
+* **Multi-threading** – AVC automatically detects CPU cores for parallel processing
+* **Git Compatibility** – Use AGCL to push AVC repos directly to GitHub/GitLab
+* **Cross-platform** – Use `-DAVC_PORTABLE_BUILD=ON` for ARM/older CPUs
+* **Compression** – libdeflate compression enabled by default for efficiency
+* **Hardware** – SSDs and plenty of RAM noticeably speed up operations
 
 ---
 
 ## 5. Command Reference (Detailed)
 
-See the built-in help for any command:
+### Common Workflows
+
+**Local Development:**
 ```bash
-avc <command> --help
+avc init
+avc add .
+avc commit -m "Initial commit"
+# Continue with normal AVC workflow
 ```
 
-Complete flags and sub-commands are documented in the man-pages (coming soon).
+**GitHub Project:**
+```bash
+avc init && avc agcl git-init
+avc add .
+avc commit -m "Initial commit"
+avc agcl sync-to-git
+git remote add origin <repo-url>
+git push -u origin main
+```
+
+**Incremental Updates:**
+```bash
+# Add new files
+avc add new-feature.c
+avc commit -m "Add new feature"
+
+# Sync and push
+avc agcl sync-to-git
+git push origin main
+```
+
+For detailed AGCL usage and troubleshooting, see [`AGCL_USAGE.md`](AGCL_USAGE.md).

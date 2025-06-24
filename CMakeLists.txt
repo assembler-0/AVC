@@ -5,12 +5,20 @@ project(AVC VERSION 0.1.1 LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# Cross-platform build option
+option(AVC_PORTABLE_BUILD "Build without native CPU optimizations for better portability" OFF)
+
 # Compiler-specific optimizations
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    # Release optimizations
-    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -flto")
-    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fomit-frame-pointer -funroll-loops")
+    if(AVC_PORTABLE_BUILD)
+        # Portable release build
+        set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+    else()
+        # Native optimized release build
+        set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -flto")
+        if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fomit-frame-pointer -funroll-loops")
+        endif()
     endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # Debug flags
@@ -32,14 +40,23 @@ find_package(OpenMP)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBDEFLATE REQUIRED libdeflate)
 
-add_library(blake3 STATIC
+# BLAKE3 source files
+set(BLAKE3_SOURCES
     src/blake3/blake3.c
     src/blake3/blake3_dispatch.c
-    src/blake3/blake3_portable.c      # portable fallback
-    src/blake3/blake3_sse2.c          # ← add
-    src/blake3/blake3_sse41.c         # ← add
-    src/blake3/blake3_avx2.c          # ← add
+    src/blake3/blake3_portable.c
 )
+
+# Add SIMD sources only for non-portable builds
+if(NOT AVC_PORTABLE_BUILD)
+    list(APPEND BLAKE3_SOURCES
+        src/blake3/blake3_sse2.c
+        src/blake3/blake3_sse41.c
+        src/blake3/blake3_avx2.c
+    )
+endif()
+
+add_library(blake3 STATIC ${BLAKE3_SOURCES})
 target_include_directories(blake3 PUBLIC src/blake3)
 # Create a library for core functionality
 add_library(avc_core STATIC
@@ -86,7 +103,18 @@ target_link_libraries(avc_core PUBLIC
         OpenSSL::Crypto
         z
 )
-target_compile_definitions(blake3 PUBLIC BLAKE3_NO_AVX512=1)
+# BLAKE3 SIMD configuration
+if(AVC_PORTABLE_BUILD)
+    target_compile_definitions(blake3 PUBLIC 
+        BLAKE3_NO_SSE2=1
+        BLAKE3_NO_SSE41=1 
+        BLAKE3_NO_AVX2=1
+        BLAKE3_NO_AVX512=1
+        BLAKE3_USE_PORTABLE_IMPL=1
+    )
+else()
+    target_compile_definitions(blake3 PUBLIC BLAKE3_NO_AVX512=1)
+endif()
 target_compile_definitions(avc_core PRIVATE
         $<$<CONFIG:Debug>:AVC_DEBUG>
         $<$<CONFIG:Release>:AVC_RELEASE>
@@ -168,6 +196,7 @@ endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C Compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+message(STATUS "Portable build: ${AVC_PORTABLE_BUILD}")
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT AVC_PORTABLE_BUILD)
     message(STATUS "LTO enabled: ${CMAKE_INTERPROCEDURAL_OPTIMIZATION}")
 endif()
