@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 
 // Git object types
@@ -105,14 +106,22 @@ static long iso_to_epoch(const char *iso_str) {
     struct tm tm = {0};
     // Attempt to parse the incoming date string
     if (!strptime(iso_str, "%Y-%m-%d %H:%M:%S", &tm)) {
-        // If parsing fails, fall back to current time to ensure a valid timestamp
-        return time(NULL);
+        // Try alternative format without seconds
+        if (!strptime(iso_str, "%Y-%m-%d %H:%M", &tm)) {
+            // If parsing fails, fall back to current time to ensure a valid timestamp
+            printf("Warning: Failed to parse date '%s', using current time\n", iso_str);
+            return time(NULL);
+        }
     }
     // Convert to epoch (try timegm for UTC, fall back to mktime which assumes local time)
     #ifdef _GNU_SOURCE
     return timegm(&tm);
     #else
-    return mktime(&tm);
+    // For systems without timegm, manually adjust for UTC
+    time_t local_time = mktime(&tm);
+    struct tm *utc_tm = gmtime(&local_time);
+    time_t utc_time = mktime(utc_tm);
+    return local_time + (local_time - utc_time);
     #endif
 }
 
@@ -284,8 +293,9 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
             char filepath[256], avc_hash_entry[65];
             
             if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
-                // Each entry: mode (6 chars) + space + filename + null + hash (20 bytes)
-                total_size += 6 + 1 + strlen(filepath) + 1 + 20;
+                // Each entry: mode digits + space + filename + null + hash (20 bytes)
+                int mode_len = snprintf(NULL, 0, "%o", mode);
+                total_size += mode_len + 1 + strlen(filepath) + 1 + 20;
                 entry_count++;
             }
         }
@@ -340,11 +350,12 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
                 unsigned char hash_binary[20];
                 for (int i = 0; i < 20; i++) {
                     char hex_pair[3] = {git_hash_entry[i*2], git_hash_entry[i*2+1], '\0'};
-                    hash_binary[i] = strtol(hex_pair, NULL, 16);
+                    hash_binary[i] = (unsigned char)strtol(hex_pair, NULL, 16);
                 }
                 
-                // Format: "mode filename\0hash"
-                int len = sprintf(git_tree_content + git_tree_offset, "%o %s", mode, filepath);
+                // Format: "mode filename\0hash" - Git tree format
+                int len = snprintf(git_tree_content + git_tree_offset, 
+                                 total_size - git_tree_offset, "%o %s", mode, filepath);
                 git_tree_offset += len;
                 git_tree_content[git_tree_offset++] = '\0';
                 memcpy(git_tree_content + git_tree_offset, hash_binary, 20);
@@ -402,6 +413,13 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
     
     char* git_commit_content = malloc(commit_size * 2);
     size_t git_commit_offset = 0;
+    
+    // Find the empty line that separates headers from message
+    char* message_start = strstr(commit_copy, "\n\n");
+    if (message_start) {
+        *message_start = '\0'; // Split headers and message
+        message_start += 2; // Skip the \n\n
+    }
     
     char *saveptr;
     char* line = strtok_r(commit_copy, "\n", &saveptr);
@@ -504,19 +522,20 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
                     }
                 }
             }
-        } else if (strlen(line) == 0) {
-            // Empty line - this separates headers from commit message
-            git_commit_offset += snprintf(git_commit_content + git_commit_offset,
-                                        commit_size * 2 - git_commit_offset,
-                                        "\n");
-        } else {
-            // Copy other lines as-is (commit message)
-            git_commit_offset += snprintf(git_commit_content + git_commit_offset,
-                                        commit_size * 2 - git_commit_offset,
-                                        "%s\n", line);
         }
         
         line = strtok_r(NULL, "\n", &saveptr);
+    }
+    
+    // Add empty line separator
+    git_commit_offset += snprintf(git_commit_content + git_commit_offset,
+                                commit_size * 2 - git_commit_offset, "\n");
+    
+    // Add commit message
+    if (message_start && strlen(message_start) > 0) {
+        git_commit_offset += snprintf(git_commit_content + git_commit_offset,
+                                    commit_size * 2 - git_commit_offset,
+                                    "%s", message_start);
     }
     
     printf("Git commit content:\n%s\n", git_commit_content);
@@ -565,7 +584,7 @@ int cmd_git_init(int argc, char* argv[]) {
         fclose(git_head);
     }
     
-    // Create Git config
+    // Create Git config with proper settings
     FILE* git_config = fopen(".git/config", "w");
     if (git_config) {
         fprintf(git_config, "[core]\n");
@@ -573,7 +592,17 @@ int cmd_git_init(int argc, char* argv[]) {
         fprintf(git_config, "\tfilemode = true\n");
         fprintf(git_config, "\tbare = false\n");
         fprintf(git_config, "\tlogallrefupdates = true\n");
+        fprintf(git_config, "\tprecomposeunicode = true\n");
+        fprintf(git_config, "[init]\n");
+        fprintf(git_config, "\tdefaultBranch = main\n");
         fclose(git_config);
+    }
+    
+    // Create empty Git description file
+    FILE* git_desc = fopen(".git/description", "w");
+    if (git_desc) {
+        fprintf(git_desc, "Unnamed repository; edit this file 'description' to name the repository.\n");
+        fclose(git_desc);
     }
     
     printf("Git repository initialized alongside AVC\n");
@@ -631,7 +660,7 @@ int cmd_sync_to_git(int argc, char* argv[]) {
     // Convert current commit to Git format
     char git_commit_hash[41];
     if (convert_avc_commit_to_git(current_commit, git_commit_hash) == 0) {
-        // Update Git HEAD
+        // Update Git HEAD reference
         FILE* git_head = fopen(".git/refs/heads/main", "w");
         if (git_head) {
             fprintf(git_head, "%s\n", git_commit_hash);
@@ -639,11 +668,75 @@ int cmd_sync_to_git(int argc, char* argv[]) {
         }
         
         printf("Synced commit %s -> %s\n", current_commit, git_commit_hash);
+        
+        // Verify the commit has content
+        printf("Verifying commit content...\n");
+        char verify_cmd[256];
+        snprintf(verify_cmd, sizeof(verify_cmd), "git cat-file -p %s", git_commit_hash);
+        int result = system(verify_cmd);
+        if (result != 0) {
+            fprintf(stderr, "Warning: Commit verification failed\n");
+        }
     } else {
         fprintf(stderr, "Failed to sync commit\n");
         return 1;
     }
     
+    return 0;
+}
+
+// Verify Git repository state before push
+int cmd_verify_git(int argc, char* argv[]) {
+    printf("Verifying Git repository state...\n");
+    
+    // Check if .git directory exists
+    struct stat st;
+    if (stat(".git", &st) == -1) {
+        fprintf(stderr, "No .git directory found\n");
+        return 1;
+    }
+    
+    // Check HEAD reference
+    FILE* head = fopen(".git/HEAD", "r");
+    if (!head) {
+        fprintf(stderr, "No HEAD file found\n");
+        return 1;
+    }
+    
+    char head_content[256];
+    if (fgets(head_content, sizeof(head_content), head)) {
+        printf("HEAD: %s", head_content);
+    }
+    fclose(head);
+    
+    // Check main branch reference
+    FILE* main_ref = fopen(".git/refs/heads/main", "r");
+    if (main_ref) {
+        char commit_hash[42];
+        if (fgets(commit_hash, sizeof(commit_hash), main_ref)) {
+            printf("main branch: %s", commit_hash);
+            
+            // Verify the commit object exists
+            commit_hash[strcspn(commit_hash, "\n")] = '\0';
+            char obj_path[512];
+            snprintf(obj_path, sizeof(obj_path), ".git/objects/%c%c/%s", 
+                     commit_hash[0], commit_hash[1], commit_hash + 2);
+            
+            if (access(obj_path, F_OK) == 0) {
+                printf("✓ Commit object exists: %s\n", obj_path);
+            } else {
+                printf("✗ Commit object missing: %s\n", obj_path);
+                fclose(main_ref);
+                return 1;
+            }
+        }
+        fclose(main_ref);
+    } else {
+        fprintf(stderr, "No main branch reference found\n");
+        return 1;
+    }
+    
+    printf("Git repository state verified successfully\n");
     return 0;
 }
 
@@ -655,6 +748,8 @@ int cmd_agcl(int argc, char* argv[]) {
         printf("Commands:\n");
         printf("  git-init     Initialize Git repository alongside AVC\n");
         printf("  sync-to-git  Sync AVC objects to Git format\n");
+        printf("  verify-git   Verify Git repository state\n");
+        printf("  fix-refs     Fix Git references and index\n");
         printf("  sync-from-git Sync Git objects to AVC format\n");
         printf("  migrate      Convert existing Git repo to AVC\n");
         return 1;
@@ -666,6 +761,8 @@ int cmd_agcl(int argc, char* argv[]) {
         return cmd_git_init(argc - 1, argv + 1);
     } else if (strcmp(subcommand, "sync-to-git") == 0) {
         return cmd_sync_to_git(argc - 1, argv + 1);
+    } else if (strcmp(subcommand, "verify-git") == 0) {
+        return cmd_verify_git(argc - 1, argv + 1);
     } else {
         printf("Unknown AGCL command: %s\n", subcommand);
         return 1;
