@@ -1,8 +1,8 @@
-# AVC - Archive Version Control v0.3.0 "Git Bridge" - STABLE
+# AVC - Archive Version Control v0.3.0 "Delta Spectre"
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
-[![Build Status](https://img.shields.io/badge/build-stable-green.svg)]()
+[![Build Status](https://img.shields.io/badge/build-usable-orange.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance version control system with **Git compatibility** through AGCL (AVC Git Compatibility Layer). Push AVC repositories directly to GitHub while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
 
