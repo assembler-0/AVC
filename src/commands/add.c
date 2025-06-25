@@ -234,8 +234,7 @@ int cmd_add(int argc, char* argv[]) {
     // Clean up TUI
     if (hash_progress) progress_free(hash_progress);
     
-    // Clean up memory pool to prevent memory leaks
-    reset_memory_pool();
+
 
         // free memory
     for (size_t i=0;i<file_count;++i) free(file_paths[i]);

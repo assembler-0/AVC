@@ -6,8 +6,8 @@
 #include "commands.h"
 
 // Version information
-#define AVC_VERSION "0.2.1"
-#define AVC_CODENAME "Cryo Falcon"
+#define AVC_VERSION "0.3.1"
+#define AVC_CODENAME "Delta Spectre"
 #define AVC_BUILD_DATE __DATE__
 #define AVC_BUILD_TIME __TIME__
 

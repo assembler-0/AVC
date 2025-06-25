@@ -42,10 +42,7 @@ typedef struct {
 static fast_index_t* fast_idx = NULL;
 static int idx_loaded = 0;
 
-// Legacy arrays for compatibility (deprecated)
-static IndexEntry* idx_entries = NULL;
-static size_t idx_count = 0;
-static size_t idx_capacity = 0;
+
 
 // Public helper: return hash string for given path if present in loaded index, else NULL
 const char* index_get_hash(const char* filepath) {
@@ -53,16 +50,7 @@ const char* index_get_hash(const char* filepath) {
     return fast_index_get_hash(fast_idx, filepath);
 }
 
-static void index_entries_free(void) {
-    for (size_t i = 0; i < idx_count; ++i) {
-        free(idx_entries[i].hash);
-        free(idx_entries[i].path);
-    }
-    free(idx_entries);
-    idx_entries = NULL;
-    idx_count = 0;
-    idx_capacity = 0;
-}
+
 
 int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned int mode, int* unchanged_out) {
     if (unchanged_out) *unchanged_out = 0;
@@ -165,25 +153,8 @@ int index_commit(void) {
 
 // Check if file is already in index with same hash
 int is_file_unchanged_in_index(const char* filepath, const char* new_hash) {
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        return 0; // No index, file not staged
-    }
-
-    char line[1024];
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], indexed_filepath[256]; // 64 chars + null terminator
-        unsigned int mode;
-
-        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (paths_equal(indexed_filepath, filepath)) {
-                fclose(index);
-                return (strcmp(hash, new_hash) == 0); // Return 1 if unchanged, 0 if changed
-            }
-        }
-    }
-    fclose(index);
-    return 0; // Not found in index
+    const char* old_hash = index_get_hash(filepath);
+    return old_hash && strcmp(old_hash, new_hash) == 0;
 }
 
 // Upsert file in index: 
@@ -284,25 +255,7 @@ int add_file_to_index(const char* filepath) {
 
 // Check if file is in index
 int is_file_in_index(const char* filepath) {
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        return 0; // No index, file not staged
-    }
-
-    char line[1024];
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], indexed_filepath[256]; // Updated to 64 chars
-        unsigned int mode;
-
-        if (sscanf(line, "%64s %255s %o", hash, indexed_filepath, &mode) == 3) {
-            if (paths_equal(indexed_filepath, filepath)) {
-                fclose(index);
-                return 1; // Found in index
-            }
-        }
-    }
-    fclose(index);
-    return 0; // Not found in index
+    return index_get_hash(filepath) != NULL;
 }
 
 // Remove file from staging area (index)
