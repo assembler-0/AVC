@@ -1,7 +1,12 @@
 // AVC Git Compatibility Layer (AGCL)
 // Handles conversion between AVC and Git formats
 #define _XOPEN_SOURCE 700   /* for strptime */
-#define _GNU_SOURCE 
+#define _GNU_SOURCE
+
+// Suppress OpenSSL SHA1 deprecation warnings for Git compatibility
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +79,10 @@ static void sha1_to_blake3(const char* sha1_hash, char* blake3_hash) {
 // Forward declarations
 static int read_mapping(const char* avc_hash, char* git_hash_out);
 static int append_mapping(const char* avc_hash, const char* git_hash);
+static char* load_git_object(const char* git_hash, size_t* size_out, char* type_out);
+static int convert_git_blob_to_avc(const char* git_hash, char* avc_hash_out);
+static int convert_git_tree_to_avc(const char* git_hash, char* avc_hash_out);
+int cmd_sync_from_git(int argc, char* argv[]);
 
 // Helper: check if a Git object already exists
 static int git_object_exists(const char* git_hash) {
@@ -110,17 +119,16 @@ static int append_mapping(const char* avc_hash, const char* git_hash) {
     return hash_map_set(g_hash_map, avc_hash, git_hash);
 }
 
-// Convert ISO 8601 datetime ("YYYY-MM-DD HH:MM:SS") to epoch seconds (UTC)
+// Convert ISO 8601 datetime to epoch seconds (UTC)
 static long iso_to_epoch(const char *iso_str) {
     struct tm tm = {0};
-    // Attempt to parse the incoming date string
-    if (!strptime(iso_str, "%Y-%m-%d %H:%M:%S", &tm)) {
-        // Try alternative format without seconds
-        if (!strptime(iso_str, "%Y-%m-%d %H:%M", &tm)) {
-            // If parsing fails, fall back to current time to ensure a valid timestamp
-            printf("Warning: Failed to parse date '%s', using current time\n", iso_str);
-            return time(NULL);
-        }
+    
+    // Try multiple date formats
+    if (!strptime(iso_str, "%Y-%m-%d %H:%M:%S", &tm) &&
+        !strptime(iso_str, "%Y-%m-%d %H:%M", &tm) &&
+        !strptime(iso_str, "%Y-%m-%d", &tm)) {
+        // If all parsing fails, use current time
+        return time(NULL);
     }
     // Convert to epoch (try timegm for UTC, fall back to mktime which assumes local time)
     #ifdef _GNU_SOURCE
@@ -699,8 +707,101 @@ int cmd_sync_to_git(int argc, char* argv[]) {
     return 0;
 }
 
+// EXPERIMENTAL: Migrate Git repository to AVC format
+int cmd_migrate(int argc, char* argv[]) {
+    tui_header("AGCL Git Migration");
+    
+    char* git_url = NULL;
+    char repo_name[256] = {0};
+    int clone_mode = 0;
+    
+    // Check if URL is provided
+    if (argc > 1) {
+        git_url = argv[1];
+        clone_mode = 1;
+        
+        // Extract repo name from URL
+        char* last_slash = strrchr(git_url, '/');
+        if (last_slash) {
+            strcpy(repo_name, last_slash + 1);
+            // Remove .git extension if present
+            char* dot_git = strstr(repo_name, ".git");
+            if (dot_git) *dot_git = '\0';
+        } else {
+            strcpy(repo_name, "migrated-repo");
+        }
+    } else {
+        // Check if we're in a Git repository
+        struct stat st;
+        if (stat(".git", &st) == -1) {
+            tui_error("Usage: avc agcl migrate [git-url]");
+            printf("\n");
+            printf("Examples:\n");
+            printf("  avc agcl migrate https://github.com/user/repo.git\n");
+            printf("  avc agcl migrate  # (in existing Git repo)\n");
+            return 1;
+        }
+        
+        // Check if AVC already exists
+        if (stat(".avc", &st) == 0) {
+            tui_error("AVC repository already exists! Migration would overwrite it.");
+            return 1;
+        }
+    }
+    
+    if (clone_mode) {
+        printf("Migrating: %s\n", git_url);
+    } else {
+        printf("Migrating current Git repository to AVC\n");
+    }
+    
+    // Clone if URL provided
+    if (clone_mode) {
+        char clone_cmd[1024];
+        snprintf(clone_cmd, sizeof(clone_cmd), "git clone %s %s", git_url, repo_name);
+        if (system(clone_cmd) != 0) {
+            tui_error("Clone failed");
+            return 1;
+        }
+        if (chdir(repo_name) != 0) {
+            tui_error("Failed to enter directory");
+            return 1;
+        }
+    }
+    
+    // Remove Git, init AVC, add files, commit
+    system("rm -rf .git");
+    
+    char* init_args[] = {"avc"};
+    if (cmd_init(1, init_args) != 0) return 1;
+    
+    char* add_args[] = {"avc", "."};
+    if (cmd_add(2, add_args) != 0) return 1;
+    
+    char* commit_args[] = {"avc", "-m", "Initial AVC migration"};
+    if (cmd_commit(3, commit_args) != 0) return 1;
+    
+    // Setup Git compatibility and sync
+    cmd_git_init(0, NULL);
+    cmd_sync_to_git(0, NULL);
+    
+    // Add remote if cloned
+    if (clone_mode) {
+        char remote_cmd[1024];
+        snprintf(remote_cmd, sizeof(remote_cmd), "git remote add origin %s", git_url);
+        system(remote_cmd);
+        printf("Ready to push: git push -f origin main\n");
+    }
+    
+    tui_success("Migration complete");
+    
+    return 0;
+}
+
 // Verify Git repository state before push
 int cmd_verify_git(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
     printf("Verifying Git repository state...\n");
     
     // Check if .git directory exists
@@ -754,6 +855,113 @@ int cmd_verify_git(int argc, char* argv[]) {
     return 0;
 }
 
+
+int cmd_sync_from_git(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+
+    struct stat st;
+    if (stat(".git", &st) == -1 || stat(".avc", &st) == -1) {
+        tui_error("Both .git and .avc directories required");
+        return 1;
+    }
+
+    FILE* git_head = fopen(".git/refs/heads/main", "r");
+    if (!git_head) {
+        tui_error("No Git main branch found");
+        return 1;
+    }
+
+    char git_commit_hash[42];
+    if (!fgets(git_commit_hash, sizeof(git_commit_hash), git_head)) {
+        fclose(git_head);
+        return 1;
+    }
+    fclose(git_head);
+    git_commit_hash[strcspn(git_commit_hash, "\n")] = '\0';
+
+    // Parse Git commit to extract and convert tree hash
+    size_t commit_size;
+    char commit_type[16];
+    char* commit_content = load_git_object(git_commit_hash, &commit_size, commit_type);
+
+    if (!commit_content || strcmp(commit_type, "commit") != 0) {
+        free(commit_content);
+        return 1;
+    }
+
+    // Find and convert the tree referenced in the commit
+    char* tree_line = strstr(commit_content, "tree ");
+    if (tree_line) {
+        char git_tree_hash[41];
+        if (sscanf(tree_line, "tree %40s", git_tree_hash) == 1) {
+            char avc_tree_hash[65];
+            if (convert_git_tree_to_avc(git_tree_hash, avc_tree_hash) != 0) {
+                tui_warning("Failed to convert Git tree to AVC");
+            }
+        }
+    }
+
+    // Convert Git commit format to AVC commit format
+    char* avc_commit_content = malloc(commit_size * 2);
+    size_t avc_commit_size = 0;
+    
+    // Parse Git commit and convert tree/parent hashes to AVC format
+    char* line_start = commit_content;
+    char* line_end;
+    
+    while ((line_end = strchr(line_start, '\n')) != NULL) {
+        *line_end = '\0';
+        
+        if (strncmp(line_start, "tree ", 5) == 0) {
+            char git_tree_hash[41];
+            if (sscanf(line_start, "tree %40s", git_tree_hash) == 1) {
+                char avc_tree_hash[65];
+                if (convert_git_tree_to_avc(git_tree_hash, avc_tree_hash) == 0) {
+                    avc_commit_size += snprintf(avc_commit_content + avc_commit_size,
+                                              commit_size * 2 - avc_commit_size,
+                                              "tree %s\n", avc_tree_hash);
+                }
+            }
+        } else {
+            // Copy other lines as-is (author, committer, etc.)
+            avc_commit_size += snprintf(avc_commit_content + avc_commit_size,
+                                      commit_size * 2 - avc_commit_size,
+                                      "%s\n", line_start);
+        }
+        
+        line_start = line_end + 1;
+        if (line_start >= commit_content + commit_size) break;
+    }
+    
+    char avc_commit_hash[65];
+    if (store_object("commit", avc_commit_content, avc_commit_size, avc_commit_hash) != 0) {
+        free(commit_content);
+        free(avc_commit_content);
+        return 1;
+    }
+    
+    free(avc_commit_content);
+
+    free(commit_content);
+
+    FILE* avc_head = fopen(".avc/refs/heads/main", "w");
+    if (avc_head) {
+        fprintf(avc_head, "%s\n", avc_commit_hash);
+        fclose(avc_head);
+    }
+
+    append_mapping(avc_commit_hash, git_commit_hash);
+    if (g_hash_map) {
+        hash_map_commit(g_hash_map);
+    }
+
+    tui_success("Synced from Git - files are ready");
+    printf("Note: Files from Git commit are now in AVC. Use 'ls' to see them.\n");
+    
+    return 0;
+}
+
 // Main AGCL command dispatcher
 int cmd_agcl(int argc, char* argv[]) {
     if (argc < 2) {
@@ -762,10 +970,11 @@ int cmd_agcl(int argc, char* argv[]) {
         printf("Commands:\n");
         printf("  git-init     Initialize Git repository alongside AVC\n");
         printf("  sync-to-git  Sync AVC objects to Git format\n");
-        printf("  verify-git   Verify Git repository state\n");
-        printf("  fix-refs     Fix Git references and index\n");
         printf("  sync-from-git Sync Git objects to AVC format\n");
-        printf("  migrate      Convert existing Git repo to AVC\n");
+        printf("  verify-git   Verify Git repository state\n");
+        printf("  migrate      Convert existing Git repo to AVC (EXPERIMENTAL)\n");
+        printf("\n");
+        printf("Note: Additional commands (fix-refs) are planned for future releases.\n");
         return 1;
     }
     
@@ -777,8 +986,156 @@ int cmd_agcl(int argc, char* argv[]) {
         return cmd_sync_to_git(argc - 1, argv + 1);
     } else if (strcmp(subcommand, "verify-git") == 0) {
         return cmd_verify_git(argc - 1, argv + 1);
+    } else if (strcmp(subcommand, "migrate") == 0) {
+        return cmd_migrate(argc - 1, argv + 1);
+    } else if (strcmp(subcommand, "sync-from-git") == 0) {
+        return cmd_sync_from_git(argc - 1, argv + 1);
     } else {
         printf("Unknown AGCL command: %s\n", subcommand);
         return 1;
     }
-} 
+}
+
+
+
+// Convert Git blob to AVC blob
+static int convert_git_blob_to_avc(const char* git_hash, char* avc_hash_out) {
+    size_t blob_size;
+    char blob_type[16];
+    char* blob_content = load_git_object(git_hash, &blob_size, blob_type);
+    
+    if (!blob_content || strcmp(blob_type, "blob") != 0) {
+        free(blob_content);
+        return -1;
+    }
+    
+    int result = store_object("blob", blob_content, blob_size, avc_hash_out);
+    free(blob_content);
+    
+    if (result == 0) {
+        append_mapping(avc_hash_out, git_hash);
+    }
+    
+    return result;
+}
+
+// Convert Git tree to AVC tree
+static int convert_git_tree_to_avc(const char* git_hash, char* avc_hash_out) {
+    size_t tree_size;
+    char tree_type[16];
+    char* tree_content = load_git_object(git_hash, &tree_size, tree_type);
+    
+    if (!tree_content || strcmp(tree_type, "tree") != 0) {
+        free(tree_content);
+        return -1;
+    }
+    
+    // Parse Git tree format and convert to AVC format
+    char* avc_tree_content = malloc(tree_size * 2); // Estimate size
+    size_t avc_offset = 0;
+    size_t git_offset = 0;
+    
+    while (git_offset < tree_size) {
+        // Parse Git tree entry: "mode filename\0hash(20 bytes)"
+        char* mode_start = tree_content + git_offset;
+        char* space = strchr(mode_start, ' ');
+        if (!space) break;
+        
+        char* filename = space + 1;
+        char* null_pos = strchr(filename, '\0');
+        if (!null_pos) break;
+        
+        unsigned char* git_hash_binary = (unsigned char*)(null_pos + 1);
+        
+        // Convert binary hash to hex
+        char git_entry_hash[41];
+        for (int i = 0; i < 20; i++) {
+            sprintf(git_entry_hash + i * 2, "%02x", git_hash_binary[i]);
+        }
+        git_entry_hash[40] = '\0';
+        
+        // Parse mode
+        unsigned int mode;
+        sscanf(mode_start, "%o", &mode);
+        
+        // Convert referenced object to AVC
+        char avc_entry_hash[65];
+        if (mode == 040000) {
+            // Directory - convert tree
+            convert_git_tree_to_avc(git_entry_hash, avc_entry_hash);
+        } else {
+            // File - convert blob
+            convert_git_blob_to_avc(git_entry_hash, avc_entry_hash);
+        }
+        
+        // Write AVC tree entry: "mode filename hash\n"
+        avc_offset += snprintf(avc_tree_content + avc_offset, 
+                              tree_size * 2 - avc_offset,
+                              "%o %s %s\n", mode, filename, avc_entry_hash);
+        
+        // Move to next entry
+        git_offset = (null_pos + 1 + 20) - tree_content;
+    }
+    
+    int result = store_object("tree", avc_tree_content, avc_offset, avc_hash_out);
+    free(tree_content);
+    free(avc_tree_content);
+    
+    if (result == 0) {
+        append_mapping(avc_hash_out, git_hash);
+    }
+    
+    return result;
+}
+
+// Load Git object (SHA-1 + zlib decompression)
+static char* load_git_object(const char* git_hash, size_t* size_out, char* type_out) {
+    char obj_path[512];
+    snprintf(obj_path, sizeof(obj_path), ".git/objects/%c%c/%s", 
+             git_hash[0], git_hash[1], git_hash + 2);
+    
+    FILE* obj_file = fopen(obj_path, "rb");
+    if (!obj_file) return NULL;
+    
+    fseek(obj_file, 0, SEEK_END);
+    size_t compressed_size = ftell(obj_file);
+    fseek(obj_file, 0, SEEK_SET);
+    
+    char* compressed = malloc(compressed_size);
+    if (!compressed) {
+        fclose(obj_file);
+        return NULL;
+    }
+    fread(compressed, 1, compressed_size, obj_file);
+    fclose(obj_file);
+    
+    size_t estimated_size = compressed_size * 4;
+    char* decompressed = git_decompress(compressed, compressed_size, estimated_size);
+    free(compressed);
+    
+    if (!decompressed) return NULL;
+    
+    char* null_pos = strchr(decompressed, '\0');
+    if (!null_pos) {
+        free(decompressed);
+        return NULL;
+    }
+    
+    sscanf(decompressed, "%15s %zu", type_out, size_out);
+    
+    char* content = malloc(*size_out);
+    if (!content) {
+        free(decompressed);
+        return NULL;
+    }
+    memcpy(content, null_pos + 1, *size_out);
+    free(decompressed);
+    
+    return content;
+}
+
+// Sync Git objects to AVC format
+
+
+
+#pragma GCC diagnostic pop 
