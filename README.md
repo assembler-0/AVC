@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.1-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-usable-orange.svg)]()
 
-**AVC** (Archive Version Control) is a high-performance version control system with **Git compatibility** through AGCL (AVC Git Compatibility Layer). Push AVC repositories directly to GitHub while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
+**AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
 
 ---
 
@@ -13,6 +13,7 @@
 * **Build & Installation:** see [`BUILD.md`](docs/BUILD.md)
 * **Usage Guide:** see [`USAGE.md`](docs/USAGE.md)
 * **AGCL Guide:** see [`AGCL_USAGE.md`](docs/AGCL_USAGE.md)
+* **Git Collaboration:** see [`WORKFLOW_SAMPLE.md`](docs/WORKFLOW_SAMPLE.md)
 * **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING)
 * **Notes:** see [`NOTES.md`](docs/IMPORTANT_NOTES.md)
 
@@ -38,7 +39,9 @@
 ## ✨ Key Features
 
 ### 🔧 Core Functionality
-- **Git Compatibility (AGCL)** - Push AVC repos directly to GitHub/GitLab
+- **Bidirectional Git Compatibility (AGCL)** - Full sync between AVC and Git formats
+- **One-command migration** - Convert any Git repo to AVC instantly
+- **Mixed team collaboration** - AVC users work with Git users seamlessly
 - **BLAKE3 content addressing** - Fast, secure, collision-resistant hashing
 - **Incremental staging** - `avc add file1.txt file2.txt` works properly
 - **Multi-threaded operations** - Parallel processing for speed
@@ -81,8 +84,10 @@
 ### AGCL Commands (Git Compatibility)
 | Command | Description | Purpose            |
 |---------|-------------|--------------------|
+| `avc agcl migrate <url>` | Clone and convert Git repo to AVC | One-command migration |
 | `avc agcl git-init` | Initialize Git repo alongside AVC | Setup Git compatibility |
 | `avc agcl sync-to-git` | Convert AVC objects to Git format | Prepare for GitHub push |
+| `avc agcl sync-from-git` | Import Git objects to AVC format | Pull Git changes to AVC |
 | `avc agcl verify-git` | Verify Git repository state | Debug conversion issues |
 
 ### Flags Reference
@@ -181,6 +186,6 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 ---
 
-**AVC v0.3.0 "Git Bridge"** - The first version control system with native GitHub compatibility.
+**AVC v0.3.1 "Delta Spectre"** - The first version control system with bidirectional Git compatibility and seamless team collaboration.
 
 *Built with ❤️ by Atheria*
