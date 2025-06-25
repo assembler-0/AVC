@@ -12,6 +12,8 @@
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
+#include "fast_agcl.h"
+#include "tui.h"
 #include <blake3/blake3.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -80,25 +82,32 @@ static int git_object_exists(const char* git_hash) {
     return access(path, F_OK) == 0;
 }
 
-// Read mapping; returns 0 if entry found
-static int read_mapping(const char* avc_hash, char* git_hash_out) {
-    FILE* fp = fopen(AGCL_MAP_PATH, "r");
-    if (!fp) return -1;
-    char a[65], g[41];
-    int found = -1;
-    while (fscanf(fp, "%64s %40s", a, g) == 2) {
-        if (strcmp(a, avc_hash) == 0) { strcpy(git_hash_out, g); found = 0; break; }
+// Global hash mapping cache
+static hash_map_t* g_hash_map = NULL;
+
+// Initialize hash mapping cache
+static void init_hash_map(void) {
+    if (!g_hash_map) {
+        g_hash_map = hash_map_create();
+        hash_map_load(g_hash_map);
     }
-    fclose(fp);
-    return found;
 }
 
+// Fast mapping lookup
+static int read_mapping(const char* avc_hash, char* git_hash_out) {
+    init_hash_map();
+    const char* git_hash = hash_map_get(g_hash_map, avc_hash);
+    if (git_hash) {
+        strcpy(git_hash_out, git_hash);
+        return 0;
+    }
+    return -1;
+}
+
+// Fast mapping insert
 static int append_mapping(const char* avc_hash, const char* git_hash) {
-    FILE* fp = fopen(AGCL_MAP_PATH, "a");
-    if (!fp) return -1;
-    fprintf(fp, "%s %s\n", avc_hash, git_hash);
-    fclose(fp);
-    return 0;
+    init_hash_map();
+    return hash_map_set(g_hash_map, avc_hash, git_hash);
 }
 
 // Convert ISO 8601 datetime ("YYYY-MM-DD HH:MM:SS") to epoch seconds (UTC)
@@ -623,7 +632,10 @@ int cmd_sync_to_git(int argc, char* argv[]) {
         return 1;
     }
     
-    printf("Syncing AVC objects to Git format...\n");
+    tui_header("AGCL Sync to Git");
+    
+    spinner_t* sync_spinner = spinner_create("Syncing AVC objects to Git format ");
+    spinner_update(sync_spinner);
     
     // Get current commit hash
     char current_commit[65];
@@ -667,18 +679,20 @@ int cmd_sync_to_git(int argc, char* argv[]) {
             fclose(git_head);
         }
         
-        printf("Synced commit %s -> %s\n", current_commit, git_commit_hash);
+        spinner_stop(sync_spinner);
+        spinner_free(sync_spinner);
         
-        // Verify the commit has content
-        printf("Verifying commit content...\n");
-        char verify_cmd[256];
-        snprintf(verify_cmd, sizeof(verify_cmd), "git cat-file -p %s", git_commit_hash);
-        int result = system(verify_cmd);
-        if (result != 0) {
-            fprintf(stderr, "Warning: Commit verification failed\n");
+        // Commit hash mappings to disk
+        if (g_hash_map) {
+            hash_map_commit(g_hash_map);
         }
+        
+        tui_success("Sync completed successfully");
+        printf("Synced commit %s -> %s\n", current_commit, git_commit_hash);
     } else {
-        fprintf(stderr, "Failed to sync commit\n");
+        spinner_stop(sync_spinner);
+        spinner_free(sync_spinner);
+        tui_error("Failed to sync commit");
         return 1;
     }
     

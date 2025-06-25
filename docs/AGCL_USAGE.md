@@ -206,7 +206,7 @@ avc agcl git-init
 # Add files incrementally
 avc add README.md
 avc add src/main.c
-avc add Makefile
+avc add Makefile.legacy
 avc commit -m "Add project files"
 
 # More changes

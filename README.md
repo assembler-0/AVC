@@ -1,7 +1,7 @@
-# AVC - Archive Version Control v0.3.0 "Delta Spectre"
+# AVC - Archive Version Control v0.3.1 "Delta Spectre" - SPEED
 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
+[![Version](https://img.shields.io/badge/version-0.3.1-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-usable-orange.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance version control system with **Git compatibility** through AGCL (AVC Git Compatibility Layer). Push AVC repositories directly to GitHub while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
@@ -14,23 +14,26 @@
 * **Usage Guide:** see [`USAGE.md`](docs/USAGE.md)
 * **AGCL Guide:** see [`AGCL_USAGE.md`](docs/AGCL_USAGE.md)
 * **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING)
+* **Notes:** see [`NOTES.md`](docs/IMPORTANT_NOTES.md)
 
 ---
 
 ## 🚀 Performance Highlights
 
-### Benchmark Results (139MB Repository)
-| Operation | AVC  | AVC --fast | Git  | Performance               |
-|-----------|------|------------|------|---------------------------|
-| **Init** | 0.001s | 0.001      | 0.001s | ⚡ Equal                   |
-| **Add** | 0.4s | 0.1s       | 1.1s | ⚡ Up to **12.7x** faster  |
-| **Commit** | 0.053s | 0.006s     | 0.244s | 🚀 **Up to 40.7x faster** |
-| **Reset** | 0.323s | 0.317s     | 0.497s | ⚡ 1.5x faster             |
-| **Repository Size** | 67MB | 140MB      | 96MB | 💾 **Up to 1.4x smaller** |
+### Benchmark Results (95000+ files)
+| Operation                        | AVC    | Git     | Performance               |
+|----------------------------------|--------|---------|---------------------------|
+| **Init**                         | 0.001  | 0.001s  | ⚡ Equal                   |
+| **Add**                          | 2.6s   | 11.358s | ⚡ Up to **4.4x** faster   |
+| **Commit**                       | 0.188s | 5.766s  | 🚀 **Up to 30.7x faster** |
+| **Reset****                      | 2.813s | 3.236s  | ⚡ 1.2x faster             |
+| **Size (pre-commit)** | 540MB  | 634MB   | 💾 **Up to 1.2x smaller** |
 
 **Best run*
 
-*Tested on Linux with OpenSSL 3.5 LTS, multi-threaded operations enabled*
+***Directory is cleaned for each run*
+
+*Tested on Linux with Kernel 6.15.3 source, multi-threaded operations enabled*
 
 ## ✨ Key Features
 
@@ -94,7 +97,7 @@
 
 ### Dual Format Support
 - **AVC Format**: BLAKE3 hashes (64-char) + libdeflate compression
-- **Git Format**: SHA-1 hashes (40-char) + zlib compression  
+- **Git Format**: SHA-1 hashes (40-char) + zlib compression
 - **AGCL Bridge**: Converts between formats seamlessly
 - **GitHub Compatible**: Push AVC repos to any Git hosting service
 

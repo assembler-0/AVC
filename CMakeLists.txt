@@ -84,6 +84,7 @@ add_library(avc_core STATIC
         src/commands/version.c
         src/commands/clean.c
         agcl/agcl.c
+        agcl/fast_agcl.c
 )
 
 # Set library properties
