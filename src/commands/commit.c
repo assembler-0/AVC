@@ -10,6 +10,7 @@
 #include "objects.h"
 #include "index.h"
 #include "arg_parser.h"
+#include "tui.h"
 
 // Structure to hold file information for parallel processing
 typedef struct {
@@ -256,11 +257,16 @@ int cmd_commit(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("Starting commit process...\n");
+    tui_header("Creating Commit");
     clock_t start_time = clock();
+    
+    spinner_t* commit_spinner = spinner_create("Starting commit process");
+    spinner_update(commit_spinner);
 
     // Configure OpenMP
     configure_parallel_processing();
+    spinner_stop(commit_spinner);
+    spinner_free(commit_spinner);
 
     // Create tree from index
     printf("Creating tree object...\n");
@@ -323,8 +329,11 @@ int cmd_commit(int argc, char* argv[]) {
     clock_t end_time = clock();
     double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
     
+    tui_success("Commit created successfully");
     printf("[main %.7s] %s\n", commit_hash, message);
-    printf("Commit completed in %.3f seconds\n", elapsed_time);
+    char time_msg[128];
+    snprintf(time_msg, sizeof(time_msg), "Commit completed in %.3f seconds", elapsed_time);
+    tui_info(time_msg);
 
     // Clean up memory pool to prevent memory leaks
     reset_memory_pool();

@@ -6,7 +6,13 @@
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
+#include "tui.h"
 #include <stdint.h>
+
+// ANSI color codes
+#define ANSI_RESET "\033[0m"
+#define ANSI_YELLOW "\033[33m"
+#define ANSI_BRIGHT_GREEN "\033[92m"
 
 // Check if we're in a repository
 int check_repo();
@@ -191,11 +197,12 @@ int cmd_status(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("On branch main\n\n");
+    tui_header("Repository Status");
+    printf("On branch main\n");
 
     struct stat st;
     if (stat(".avc/index", &st) == -1 || st.st_size == 0) {
-        printf("No changes to be committed.\n");
+        tui_info("No changes to be committed");
         return 0;
     }
 
@@ -231,9 +238,9 @@ int cmd_status(int argc, char* argv[]) {
         if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
             const char* old_hash = lookup_tree_hash(tree_table, filepath);
             if (old_hash && strcmp(old_hash, hash) == 0) {
-                printf("  \033[33mmodified:   %s\033[0m\n", filepath);
+                printf("  " ANSI_YELLOW "modified:   %s" ANSI_RESET "\n", filepath);
             } else {
-                printf("  \033[32mnew file:   %s\033[0m\n", filepath);
+                printf("  " ANSI_BRIGHT_GREEN "new file:   %s" ANSI_RESET "\n", filepath);
             }
             has_staged = 1;
         }

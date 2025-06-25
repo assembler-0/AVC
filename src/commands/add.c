@@ -6,6 +6,7 @@
 #include "objects.h"
 #include "file_utils.h"
 #include "arg_parser.h"
+#include "tui.h"
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
@@ -89,7 +90,14 @@ int cmd_add(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("Adding %zu files...\n", file_count);
+    tui_header("Adding Files");
+    printf("Processing %zu files...\n", file_count);
+    
+    // Create progress bars for large operations
+    progress_bar_t* hash_progress = NULL;
+    spinner_t* commit_spinner = NULL;
+    int use_tui = file_count > 1000;
+    
     // Results arrays
     char (*hashes)[65] = calloc(file_count, 65);
     unsigned int* modes = calloc(file_count, sizeof(unsigned int));
@@ -101,9 +109,21 @@ int cmd_add(int argc, char* argv[]) {
         return 1;
     }
 
+    // Hash and store files with progress
+    if (use_tui) {
+        hash_progress = progress_create("Processing files", file_count, 50);
+        progress_update(hash_progress, 0);
+    }
+    
     // Parallel processing of blobs
     #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < file_count; ++i) {
+        if (use_tui && i % 100 == 0) {
+            #pragma omp critical
+            {
+                progress_update(hash_progress, i);
+            }
+        }
         struct stat st;
         if (stat(file_paths[i], &st) == -1) continue;
         
@@ -136,6 +156,10 @@ int cmd_add(int argc, char* argv[]) {
         modes[i] = (unsigned int)st.st_mode;
         changed[i] = 1; // Mark as changed
     }
+    
+    if (use_tui) {
+        progress_finish(hash_progress);
+    }
 
     // Batch updates - only for changed files
     int added_count = 0;
@@ -163,14 +187,38 @@ int cmd_add(int argc, char* argv[]) {
         }
     }
 
-    printf("Committing index...\n");
+    // Show spinner for index commit
+    if (use_tui) {
+        commit_spinner = spinner_create("Committing index");
+        spinner_update(commit_spinner);
+    } else {
+        printf("Committing index...\n");
+    }
     if (index_commit() == -1) {
+        if (use_tui && commit_spinner) {
+            spinner_stop(commit_spinner);
+            spinner_free(commit_spinner);
+        }
         fprintf(stderr, "Failed to write index\n");
         return 1;
     }
-    printf("Added %d files to staging area.\n", added_count);
-    printf("Done.\n");
+    
+    if (use_tui && commit_spinner) {
+        spinner_stop(commit_spinner);
+        spinner_free(commit_spinner);
+    }
+    tui_success("Index committed successfully");
+    printf("Added %d files to staging area\n", added_count);
+    if (unchanged_count > 0) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Skipped %d unchanged files", unchanged_count);
+        tui_info(msg);
+    }
+    tui_success("Add operation completed");
 
+    // Clean up TUI
+    if (hash_progress) progress_free(hash_progress);
+    
     // Clean up memory pool to prevent memory leaks
     reset_memory_pool();
 
