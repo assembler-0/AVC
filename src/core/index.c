@@ -3,6 +3,7 @@
 //
 
 #include "index.h"
+#include "fast_index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,20 +38,19 @@ typedef struct {
     unsigned int mode;
 } IndexEntry;
 
+// Fast hash table index (replaces linear array)
+static fast_index_t* fast_idx = NULL;
+static int idx_loaded = 0;
+
+// Legacy arrays for compatibility (deprecated)
 static IndexEntry* idx_entries = NULL;
 static size_t idx_count = 0;
 static size_t idx_capacity = 0;
-static int idx_loaded = 0;   // 0 = on-disk mode; 1 = in-memory transactional mode
 
 // Public helper: return hash string for given path if present in loaded index, else NULL
 const char* index_get_hash(const char* filepath) {
-    if (!idx_loaded) return NULL;
-    for (size_t i = 0; i < idx_count; ++i) {
-        if (paths_equal(idx_entries[i].path, filepath)) {
-            return idx_entries[i].hash;
-        }
-    }
-    return NULL;
+    if (!idx_loaded || !fast_idx) return NULL;
+    return fast_index_get_hash(fast_idx, filepath);
 }
 
 static void index_entries_free(void) {
@@ -116,80 +116,50 @@ int upsert_file_in_index(const char* filepath, const char* new_hash, unsigned in
 }
 
 int index_load(void) {
-    if (idx_loaded) return 0; // already
-    FILE* f = fopen(".avc/index", "r");
-    if (!f) {
-        // treat missing file as empty index
+    if (idx_loaded) return 0;
+    
+    if (!fast_idx) {
+        fast_idx = fast_index_create();
+        if (!fast_idx) return -1;
+    }
+    
+    int result = fast_index_load(fast_idx);
+    if (result == 0) {
         idx_loaded = 1;
-        return 0;
     }
-    char line[1024];
-    while (fgets(line, sizeof(line), f)) {
-        char hash[65], path[256];
-        unsigned int mode;
-        if (sscanf(line, "%64s %255s %o", hash, path, &mode) != 3) continue;
-        if (idx_count >= idx_capacity) {
-            idx_capacity = idx_capacity ? idx_capacity * 2 : 32;
-            idx_entries = realloc(idx_entries, idx_capacity * sizeof(IndexEntry));
-            if (!idx_entries) { fclose(f); return -1; }
-        }
-        idx_entries[idx_count].hash = strdup2(hash);
-        idx_entries[idx_count].path = strdup2(canonical_path(path));
-        idx_entries[idx_count].mode = mode;
-        idx_count++;
-    }
-    fclose(f);
-    idx_loaded = 1;
-    return 0;
+    
+    return result;
 }
 
 int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out) {
-    if (!idx_loaded) {
-        // fall back to streaming update if not loaded
+    if (!idx_loaded || !fast_idx) {
         return upsert_file_in_index(filepath, hash, mode, unchanged_out);
     }
+    
     if (unchanged_out) *unchanged_out = 0;
-    for (size_t i = 0; i < idx_count; ++i) {
-        if (paths_equal(idx_entries[i].path, filepath)) {
-            if (strcmp(idx_entries[i].hash, hash) == 0) {
-                if (unchanged_out) *unchanged_out = 1;
-                return 0; // nothing to do
-            }
-            // update existing entry
-            free(idx_entries[i].hash);
-            idx_entries[i].hash = strdup2(hash);
-            idx_entries[i].mode = mode;
-            return 0;
-        }
+    
+    // Check if entry exists and is unchanged
+    const char* old_hash = fast_index_get_hash(fast_idx, filepath);
+    if (old_hash && strcmp(old_hash, hash) == 0) {
+        if (unchanged_out) *unchanged_out = 1;
+        return 0;
     }
-    // append new entry
-    if (idx_count >= idx_capacity) {
-        idx_capacity = idx_capacity ? idx_capacity * 2 : 32;
-        idx_entries = realloc(idx_entries, idx_capacity * sizeof(IndexEntry));
-        if (!idx_entries) return -1;
-    }
-    idx_entries[idx_count].hash = strdup2(hash);
-    idx_entries[idx_count].path = strdup2(canonical_path(filepath));
-    idx_entries[idx_count].mode = mode;
-    idx_count++;
-    return 0;
+    
+    // Insert or update entry
+    return fast_index_set(fast_idx, filepath, hash, mode);
 }
 
 int index_commit(void) {
-    if (!idx_loaded) return 0; // nothing
-    FILE* f = fopen(".avc/index.tmp", "w");
-    if (!f) return -1;
-    for (size_t i = 0; i < idx_count; ++i) {
-        fprintf(f, "%s %s %o\n", idx_entries[i].hash, idx_entries[i].path, idx_entries[i].mode);
-    }
-    fclose(f);
-    if (rename(".avc/index.tmp", ".avc/index") != 0) {
-        remove(".avc/index.tmp");
-        return -1;
-    }
-    index_entries_free();
+    if (!idx_loaded || !fast_idx) return 0;
+    
+    int result = fast_index_commit(fast_idx);
+    
+    // Clean up after commit
+    fast_index_free(fast_idx);
+    fast_idx = NULL;
     idx_loaded = 0;
-    return 0;
+    
+    return result;
 }
 
 

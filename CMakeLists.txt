@@ -63,6 +63,7 @@ add_library(avc_core STATIC
         # Core modules
         src/core/hash.c
         src/core/index.c
+        src/core/fast_index.c
         src/core/objects.c
         src/core/repository.c
 

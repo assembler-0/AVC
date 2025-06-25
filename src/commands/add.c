@@ -115,10 +115,10 @@ int cmd_add(int argc, char* argv[]) {
         progress_update(hash_progress, 0);
     }
     
-    // Parallel processing of blobs
-    #pragma omp parallel for schedule(dynamic)
+    // Ultra-fast parallel processing
+    #pragma omp parallel for schedule(static, 32)
     for (size_t i = 0; i < file_count; ++i) {
-        if (use_tui && i % 100 == 0) {
+        if (use_tui && i % 500 == 0) {
             #pragma omp critical
             {
                 progress_update(hash_progress, i);
