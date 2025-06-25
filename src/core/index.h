@@ -16,7 +16,7 @@ int clear_index(void);
 
 // Transactional index updates (load once, write once)
 int index_load(void);
-// TODO: extend with size, mtime in upcoming format v2
+
 int index_upsert_entry(const char* filepath, const char* hash, unsigned int mode, int* unchanged_out);
 int index_commit(void);
 // Returns pointer to hash string for given path if present (internal buffer), else NULL

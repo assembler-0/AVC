@@ -64,6 +64,7 @@ add_library(avc_core STATIC
         src/core/hash.c
         src/core/index.c
         src/core/fast_index.c
+        src/core/memory_pool.c
         src/core/objects.c
         src/core/repository.c
 

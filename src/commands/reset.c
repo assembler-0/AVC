@@ -13,6 +13,8 @@
 #include "objects.h"
 #include "file_utils.h"
 #include "arg_parser.h"
+#include "fast_index.h"
+#include "tui.h"
 // Helper function to create directory recursively
 int create_directory_recursive(const char* path) {
     char* path_copy = strdup2(path);
@@ -143,9 +145,10 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
 
     printf("Tree content loaded, size: %zu\n", tree_size);
 
-    // Clear current index
-    if (clear_index() == -1) {
-        fprintf(stderr, "Failed to clear index\n");
+    // Use fast index for O(1) operations
+    fast_index_t* fast_idx = fast_index_create();
+    if (!fast_idx) {
+        fprintf(stderr, "Failed to create index\n");
         free(tree_content);
         return -1;
     }
@@ -179,59 +182,26 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
         // Parse tree entry: "mode filepath hash"
         if (sscanf(line_start, "%o %511s %64s", &mode, filepath, file_hash) == 3) {
 
-            // Load file content
-            size_t file_size;
-            char file_type[16];
-            
-            // Check file object format
-            check_object_format(file_hash);
-            
-            char* file_content = load_object(file_hash, &file_size, file_type);
-
-            if (!file_content) {
-                fprintf(stderr, "Failed to load file content for: %s (hash: %s)\n", filepath, file_hash);
-                line_start = line_end + 1;
-                continue;
-            }
-
-            // Debug: Check file size
-            if (file_size >= 2000 && file_size <= 3000) {
-                // File loaded successfully
-            }
-
-            if (strcmp(file_type, "blob") != 0) {
-                fprintf(stderr, "Object %s is not a blob (type: %s)\n", file_hash, file_type);
-                free(file_content);
-                line_start = line_end + 1;
-                continue;
-            }
-
-            if (hard_reset) {
-                // Create directory structure if needed
-                if (create_directory_recursive(filepath) == -1) {
-                    fprintf(stderr, "Failed to create directory structure for: %s\n", filepath);
-                    free(file_content);
-                    line_start = line_end + 1;
-                    continue;
-                }
-
-                // Write file to working directory
-                if (write_file(filepath, file_content, file_size) == -1) {
-                    fprintf(stderr, "Failed to restore file: %s\n", filepath);
-                }
-            }
-
-            // Add to index - use same format as index.c: "hash filepath mode"
-            FILE* index = fopen(".avc/index", "a");
-            if (index) {
-                fprintf(index, "%s %s %o\n", file_hash, filepath, mode);
-                fclose(index);
+            // Add to fast index - O(1) operation
+            if (fast_index_set(fast_idx, filepath, file_hash, mode) == 0) {
                 files_processed++;
-            } else {
-                fprintf(stderr, "Failed to update index for: %s\n", filepath);
             }
-
-            free(file_content);
+            
+            if (hard_reset) {
+                // Load and restore file content for --hard reset
+                size_t file_size;
+                char file_type[16];
+                char* file_content = load_object(file_hash, &file_size, file_type);
+                
+                if (file_content && strcmp(file_type, "blob") == 0) {
+                    // Create directory structure if needed
+                    create_directory_recursive(filepath);
+                    
+                    // Write file to working directory (ignore errors)
+                    write_file(filepath, file_content, file_size);
+                    free(file_content);
+                }
+            }
         } else {
             printf("Skipping malformed tree entry: %s\n", line_start);
         }
@@ -240,6 +210,14 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     }
 
     free(tree_copy);
+    
+    // Commit fast index to disk
+    if (fast_index_commit(fast_idx) != 0) {
+        fprintf(stderr, "Failed to commit index\n");
+        fast_index_free(fast_idx);
+        return -1;
+    }
+    fast_index_free(fast_idx);
 
     printf("Processed %d files from tree\n", files_processed);
 
@@ -468,14 +446,24 @@ int cmd_reset(int argc, char* argv[]) {
         printf("Working directory cleaned.\n");
     }
 
+    tui_header("Reset Operation");
     printf("Resetting to commit %s%s...\n", target_hash_str, hard_reset ? " (hard)" : "");
+    
+    spinner_t* reset_spinner = spinner_create("Processing reset");
+    spinner_update(reset_spinner);
 
-    if (reset_to_commit(target_hash_str, hard_reset) == -1) {
+    int result = reset_to_commit(target_hash_str, hard_reset);
+    
+    spinner_stop(reset_spinner);
+    spinner_free(reset_spinner);
+    
+    if (result == -1) {
+        tui_error("Reset operation failed");
         free_parsed_args(args);
         return 1;
     }
 
-    printf("Reset complete.\n");
+    tui_success("Reset operation completed");
     free_parsed_args(args);
     return 0;
 }

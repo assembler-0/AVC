@@ -11,6 +11,7 @@
 #include "index.h"
 #include "arg_parser.h"
 #include "tui.h"
+#include "fast_index.h"
 
 // Structure to hold file information for parallel processing
 typedef struct {
@@ -45,54 +46,46 @@ static void configure_parallel_processing() {
 }
 
 int create_tree(char* tree_hash) {
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        fprintf(stderr, "No files to commit (index is empty)\n");
+    // Use fast index for O(1) operations
+    fast_index_t* fast_idx = fast_index_create();
+    if (!fast_idx || fast_index_load(fast_idx) != 0) {
+        fprintf(stderr, "Failed to load index\n");
+        if (fast_idx) fast_index_free(fast_idx);
         return -1;
     }
-
-    // First pass: count files and collect file information
-    char line[1024];
-    int file_count = 0;
     
-    // Count total files
-    while (fgets(line, sizeof(line), index)) {
-        file_count++;
-    }
-    rewind(index);
-    
-    if (file_count == 0) {
-        fclose(index);
+    if (fast_idx->count == 0) {
         fprintf(stderr, "No files to commit (index is empty)\n");
+        fast_index_free(fast_idx);
         return -1;
     }
     
     // Allocate array for file entries
-    file_entry_t* files = malloc(file_count * sizeof(file_entry_t));
+    file_entry_t* files = malloc(fast_idx->count * sizeof(file_entry_t));
     if (!files) {
         fprintf(stderr, "Memory allocation failed\n");
-        fclose(index);
+        fast_index_free(fast_idx);
         return -1;
     }
     
-    // Second pass: collect file information
+    // Collect file information from hash table
     int idx = 0;
-    while (fgets(line, sizeof(line), index) && idx < file_count) {
-        char hash[65], filepath[256];
-        unsigned int mode;
-
-        if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
-            strcpy(files[idx].hash, hash);
-            strcpy(files[idx].filepath, filepath);
-            files[idx].mode = mode;
+    for (int i = 0; i < FAST_INDEX_SIZE; i++) {
+        index_entry_t* entry = fast_idx->buckets[i];
+        while (entry && idx < fast_idx->count) {
+            strcpy(files[idx].hash, entry->hash);
+            strcpy(files[idx].filepath, entry->path);
+            files[idx].mode = entry->mode;
             
             // Pre-create entry string
             files[idx].entry_len = snprintf(files[idx].entry, sizeof(files[idx].entry), 
-                                          "%o %s %s\n", mode, filepath, hash);
+                                          "%o %s %s\n", entry->mode, entry->path, entry->hash);
             idx++;
+            entry = entry->next;
         }
     }
-    fclose(index);
+    
+    fast_index_free(fast_idx);
     
     int actual_file_count = idx;
     

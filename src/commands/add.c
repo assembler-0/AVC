@@ -1,4 +1,6 @@
 // src/commands/add.c
+#define _XOPEN_SOURCE 700   /* for strptime */
+#define _GNU_SOURCE
 #include <stdio.h>
 #include "commands.h"
 #include "repository.h"
@@ -14,8 +16,8 @@
 #include <stdlib.h>
 
 static int should_skip_path(const char* path) {
-    // Skip .git or .avc anywhere in the path
-    if (strstr(path, "/.git") != NULL || strstr(path, "/.avc") != NULL) return 1;
+    // Skip .git/ or .avc/ directories (not files containing .git)
+    if (strstr(path, "/.git/") != NULL || strstr(path, "/.avc/") != NULL) return 1;
     if (strcmp(path, ".git") == 0 || strcmp(path, ".avc") == 0) return 1;
     // Skip absolute paths
     if (path[0] == '/') return 1;
@@ -27,23 +29,35 @@ static int should_skip_path(const char* path) {
 static void collect_files(const char* path, char*** paths, size_t* count, size_t* cap) {
     if (should_skip_path(path)) return;
     struct stat st;
-    if (stat(path, &st) == -1) return;
+    if (stat(path, &st) == -1) return;  // Use stat to match find behavior
+    
     if (S_ISDIR(st.st_mode)) {
         DIR* d = opendir(path);
         if (!d) return;
         struct dirent* e;
+        
+        // Pre-allocate path buffer to avoid repeated allocations
+        size_t path_len = strlen(path);
+        char* child_buf = alloca(path_len + 256 + 2);  // Stack allocation
+        memcpy(child_buf, path, path_len);
+        child_buf[path_len] = '/';
+        
         while ((e = readdir(d))) {
-            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
-            char child[1024];
-            snprintf(child, sizeof(child), "%s/%s", path, e->d_name);
-            if (should_skip_path(child)) continue;
-            collect_files(child, paths, count, cap);
+            // Fast dot-file check
+            if (e->d_name[0] == '.' && 
+                (e->d_name[1] == '\0' || (e->d_name[1] == '.' && e->d_name[2] == '\0'))) continue;
+            
+            // Build path in pre-allocated buffer
+            strcpy(child_buf + path_len + 1, e->d_name);
+            if (should_skip_path(child_buf)) continue;
+            collect_files(child_buf, paths, count, cap);
         }
         closedir(d);
     } else if (S_ISREG(st.st_mode)) {
-        if (*count == *cap) {
-            *cap = *cap ? *cap*2 : 256;
-            *paths = realloc(*paths, *cap*sizeof(char*));
+        // Grow array more aggressively
+        if (*count >= *cap) {
+            *cap = *cap ? *cap * 2 : 2048;  // Start larger
+            *paths = realloc(*paths, *cap * sizeof(char*));
         }
         (*paths)[*count] = strdup2(path);
         (*count)++;
@@ -115,10 +129,11 @@ int cmd_add(int argc, char* argv[]) {
         progress_update(hash_progress, 0);
     }
     
-    // Ultra-fast parallel processing
-    #pragma omp parallel for schedule(static, 32)
+    // Ultra-fast parallel processing with optimal scheduling
+    #pragma omp parallel for schedule(guided, 64)
     for (size_t i = 0; i < file_count; ++i) {
-        if (use_tui && i % 500 == 0) {
+        // Reduce progress update frequency for better performance
+        if (use_tui && i % 2000 == 0) {
             #pragma omp critical
             {
                 progress_update(hash_progress, i);

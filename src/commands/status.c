@@ -7,6 +7,7 @@
 #include "repository.h"
 #include "objects.h"
 #include "tui.h"
+#include "fast_index.h"
 #include <stdint.h>
 
 // ANSI color codes
@@ -221,31 +222,35 @@ int cmd_status(int argc, char* argv[]) {
         }
     }
 
-    FILE* index = fopen(".avc/index", "r");
-    if (!index) {
-        printf("No changes to be committed.\n");
+    // Use fast index for O(1) operations
+    fast_index_t* fast_idx = fast_index_create();
+    if (!fast_idx || fast_index_load(fast_idx) != 0) {
+        tui_error("Failed to load index");
+        if (fast_idx) fast_index_free(fast_idx);
         free(tree_table);
-        return 0;
+        return 1;
     }
 
-    char line[1024];
     int has_staged = 0;
     printf("Changes to be committed:\n");
     printf("  (use \"avc commit\" to commit)\n\n");
-    while (fgets(line, sizeof(line), index)) {
-        char hash[65], filepath[256];
-        unsigned int mode;
-        if (sscanf(line, "%64s %255s %o", hash, filepath, &mode) == 3) {
-            const char* old_hash = lookup_tree_hash(tree_table, filepath);
-            if (old_hash && strcmp(old_hash, hash) == 0) {
-                printf("  " ANSI_YELLOW "modified:   %s" ANSI_RESET "\n", filepath);
+    
+    // Fast iteration through hash table buckets
+    for (int i = 0; i < FAST_INDEX_SIZE; i++) {
+        index_entry_t* entry = fast_idx->buckets[i];
+        while (entry) {
+            const char* old_hash = lookup_tree_hash(tree_table, entry->path);
+            if (old_hash && strcmp(old_hash, entry->hash) == 0) {
+                printf("  " ANSI_YELLOW "modified:   %s" ANSI_RESET "\n", entry->path);
             } else {
-                printf("  " ANSI_BRIGHT_GREEN "new file:   %s" ANSI_RESET "\n", filepath);
+                printf("  " ANSI_BRIGHT_GREEN "new file:   %s" ANSI_RESET "\n", entry->path);
             }
             has_staged = 1;
+            entry = entry->next;
         }
     }
-    fclose(index);
+    
+    fast_index_free(fast_idx);
     free(tree_table);
     if (!has_staged) {
         printf("No changes to be committed.\n");
