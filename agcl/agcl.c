@@ -38,40 +38,7 @@ typedef struct {
     char* content;
 } git_object_t;
 
-// Convert BLAKE3 hash to SHA-1 (for Git compatibility)
-// This is a simplified conversion - in practice you'd need a proper mapping
-static void blake3_to_sha1(const char* blake3_hash, char* sha1_hash) {
-    // For now, we'll use a simple truncation + padding approach
-    // In a real implementation, you'd maintain a mapping table
-    SHA_CTX ctx;
-    unsigned char digest[SHA_DIGEST_LENGTH];
-    
-    SHA1_Init(&ctx);
-    SHA1_Update(&ctx, blake3_hash, strlen(blake3_hash));
-    SHA1_Final(digest, &ctx);
-    
-    for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
-        sprintf(sha1_hash + i * 2, "%02x", digest[i]);
-    }
-    sha1_hash[40] = '\0';
-}
 
-// Convert SHA-1 hash to BLAKE3 (reverse mapping)
-static void sha1_to_blake3(const char* sha1_hash, char* blake3_hash) {
-    // This would require a reverse mapping table
-    // For now, we'll use a simple approach
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-    blake3_hasher_update(&hasher, sha1_hash, strlen(sha1_hash));
-    
-    uint8_t digest[32];
-    blake3_hasher_finalize(&hasher, digest, 32);
-    
-    for (int i = 0; i < 32; i++) {
-        sprintf(blake3_hash + i * 2, "%02x", digest[i]);
-    }
-    blake3_hash[64] = '\0';
-}
 
 // Path to mapping file that stores lines: "<avc_hash> <git_hash>\n"
 #define AGCL_MAP_PATH ".git/avc-map"
@@ -283,7 +250,7 @@ static int convert_avc_blob_to_git(const char* avc_hash, char* git_hash_out) {
     
     if (result == 0) {
         append_mapping(avc_hash, git_hash_out);
-        printf("Converted blob %s -> %s\n", avc_hash, git_hash_out);
+        // Blob converted successfully
     } else {
         printf("Failed to store Git blob for %s\n", avc_hash);
     }
@@ -414,8 +381,6 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
     memcpy(work_copy, tree_content, tree_size);
     work_copy[tree_size] = '\0';
 
-    printf("Tree has %d entries, total size: %zu\n", entry_count, total_size);
-    
     // Allocate buffer for Git tree content
     char* git_tree_content = malloc(total_size);
     if (!git_tree_content) {
@@ -447,15 +412,10 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
     
     free(entries);
     
-    printf("Git tree content size: %zu\n", git_tree_offset);
-    
     // Store as Git tree (even if some entries were skipped)
     int result = store_git_object("tree", git_tree_content, git_tree_offset, git_hash_out);
     if (result == 0) {
         append_mapping(avc_hash, git_hash_out);
-        printf("Tree converted successfully with %zu bytes\n", git_tree_offset);
-    } else {
-        printf("Failed to store Git tree object\n");
     }
     
     free(work_copy);
@@ -483,8 +443,6 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
         return -1;
     }
     
-    printf("Converting commit %s (size: %zu)\n", avc_hash, commit_size);
-    
     // Parse commit and convert tree/parent hashes
     char* commit_copy = malloc(commit_size + 1);
     if (!commit_copy) {
@@ -510,10 +468,8 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
         if (strncmp(line, "tree ", 5) == 0) {
             char avc_tree_hash[65];
             if (sscanf(line, "tree %64s", avc_tree_hash) == 1) {
-                printf("Converting tree %s\n", avc_tree_hash);
                 char git_tree_hash[41];
                 if (convert_avc_tree_to_git(avc_tree_hash, git_tree_hash) == 0) {
-                    printf("Tree converted: %s -> %s\n", avc_tree_hash, git_tree_hash);
                     git_commit_offset += snprintf(git_commit_content + git_commit_offset,
                                                 commit_size * 2 - git_commit_offset,
                                                 "tree %s\n", git_tree_hash);
@@ -621,9 +577,6 @@ static int convert_avc_commit_to_git(const char* avc_hash, char* git_hash_out) {
                                     "%s", message_start);
     }
     
-    printf("Git commit content:\n%s\n", git_commit_content);
-    
-    // Compute SHA-1 of full commit content before storing (needed for recursion termination)
     // Store as Git commit
     int result = store_git_object("commit", git_commit_content, git_commit_offset, git_hash_out);
     if (result == 0) {
