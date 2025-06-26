@@ -326,14 +326,22 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
     work_copy[tree_size] = '\0';
     
     // Git tree format: binary entries with format: mode filename\0hash
-    // We need to calculate total size first
-    size_t total_size = 0;
+    // First collect all entries, deduplicate, and sort
+    
+    typedef struct {
+        unsigned int mode;
+        char filename[256];
+        char avc_hash[65];
+        char git_hash[41];
+    } tree_entry_t;
+    
+    tree_entry_t* entries = malloc(1000 * sizeof(tree_entry_t)); // Max 1000 entries
     int entry_count = 0;
     
-    // First pass: count entries and calculate size
+    // First pass: collect and convert all entries
     char* line_start = work_copy;
     char* line_end;
-    while ((line_end = strchr(line_start, '\n')) != NULL) {
+    while ((line_end = strchr(line_start, '\n')) != NULL && entry_count < 1000) {
         *line_end = '\0';
         
         if (strlen(line_start) > 0) {
@@ -341,14 +349,65 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
             char filepath[256], avc_hash_entry[65];
             
             if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
-                // Each entry: mode digits + space + filename + null + hash (20 bytes)
-                int mode_len = snprintf(NULL, 0, "%o", mode);
-                total_size += mode_len + 1 + strlen(filepath) + 1 + 20;
-                entry_count++;
+                // Extract just filename
+                char* filename = strrchr(filepath, '/');
+                if (filename) {
+                    filename++; // Skip '/'
+                } else {
+                    filename = filepath;
+                }
+                
+                // Check for duplicates
+                int is_duplicate = 0;
+                for (int i = 0; i < entry_count; i++) {
+                    if (strcmp(entries[i].filename, filename) == 0) {
+                        is_duplicate = 1;
+                        break;
+                    }
+                }
+                
+                if (!is_duplicate) {
+                    entries[entry_count].mode = mode;
+                    strcpy(entries[entry_count].filename, filename);
+                    strcpy(entries[entry_count].avc_hash, avc_hash_entry);
+                    
+                    // Convert hash
+                    if (mode == 040000) {
+                        if (convert_avc_tree_to_git(avc_hash_entry, entries[entry_count].git_hash) != 0) {
+                            printf("Warning: Failed to convert sub-tree %s, skipping\n", avc_hash_entry);
+                            continue;
+                        }
+                    } else {
+                        if (convert_avc_blob_to_git(avc_hash_entry, entries[entry_count].git_hash) != 0) {
+                            printf("Warning: Failed to convert blob %s, skipping\n", avc_hash_entry);
+                            continue;
+                        }
+                    }
+                    
+                    entry_count++;
+                }
             }
         }
         
         line_start = line_end + 1;
+    }
+    
+    // Sort entries alphabetically by filename (Git requirement)
+    for (int i = 0; i < entry_count - 1; i++) {
+        for (int j = i + 1; j < entry_count; j++) {
+            if (strcmp(entries[i].filename, entries[j].filename) > 0) {
+                tree_entry_t temp = entries[i];
+                entries[i] = entries[j];
+                entries[j] = temp;
+            }
+        }
+    }
+    
+    // Calculate total size
+    size_t total_size = 0;
+    for (int i = 0; i < entry_count; i++) {
+        int mode_len = snprintf(NULL, 0, "%o", entries[i].mode);
+        total_size += mode_len + 1 + strlen(entries[i].filename) + 1 + 20;
     }
 
     // Restore work_copy because newline characters were replaced with NULs during the first pass
@@ -368,52 +427,25 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
     
     size_t git_tree_offset = 0;
     
-    // Second pass: build Git tree content
-    line_start = work_copy;
-    while ((line_end = strchr(line_start, '\n')) != NULL) {
-        *line_end = '\0';
-        
-        if (strlen(line_start) > 0) {
-            unsigned int mode;
-            char filepath[256], avc_hash_entry[65];
-            
-            if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
-                
-                char git_hash_entry[41];
-                if (mode == 040000) {
-                    // sub-tree
-                    if (convert_avc_tree_to_git(avc_hash_entry, git_hash_entry) != 0) {
-                        printf("Warning: Failed to convert sub-tree %s, skipping\n", avc_hash_entry);
-                        continue;
-                    }
-                } else {
-                    // treat as blob (regular file or executable, symlink, etc.)
-                    if (convert_avc_blob_to_git(avc_hash_entry, git_hash_entry) != 0) {
-                        printf("Warning: Failed to convert blob %s, skipping\n", avc_hash_entry);
-                        continue;
-                    }
-                }
-                
-                // Convert hex hash to binary
-                unsigned char hash_binary[20];
-                for (int i = 0; i < 20; i++) {
-                    char hex_pair[3] = {git_hash_entry[i*2], git_hash_entry[i*2+1], '\0'};
-                    hash_binary[i] = (unsigned char)strtol(hex_pair, NULL, 16);
-                }
-                
-                // Format: "mode filename\0hash" - Git tree format
-                int len = snprintf(git_tree_content + git_tree_offset, 
-                                 total_size - git_tree_offset, "%o %s", mode, filepath);
-                git_tree_offset += len;
-                git_tree_content[git_tree_offset++] = '\0';
-                memcpy(git_tree_content + git_tree_offset, hash_binary, 20);
-                git_tree_offset += 20;
-
-            }
+    // Build Git tree content from sorted, deduplicated entries
+    for (int i = 0; i < entry_count; i++) {
+        // Convert hex hash to binary
+        unsigned char hash_binary[20];
+        for (int j = 0; j < 20; j++) {
+            char hex_pair[3] = {entries[i].git_hash[j*2], entries[i].git_hash[j*2+1], '\0'};
+            hash_binary[j] = (unsigned char)strtol(hex_pair, NULL, 16);
         }
         
-        line_start = line_end + 1;
+        // Format: "mode filename\0hash" - Git tree format
+        int len = snprintf(git_tree_content + git_tree_offset, 
+                         total_size - git_tree_offset, "%o %s", entries[i].mode, entries[i].filename);
+        git_tree_offset += len;
+        git_tree_content[git_tree_offset++] = '\0';
+        memcpy(git_tree_content + git_tree_offset, hash_binary, 20);
+        git_tree_offset += 20;
     }
+    
+    free(entries);
     
     printf("Git tree content size: %zu\n", git_tree_offset);
     
