@@ -18,21 +18,15 @@ git push -f origin main
 ### **Scenario**: You use AVC, teammates use Git
 
 ```bash
-# 1. Pull changes from Git teammates
-git pull origin main
+# 1. Get changes from Git teammates
+avc agcl pull
 
-# 2. Import Git changes to AVC format
-avc agcl sync-from-git
-
-# 3. Work with AVC (faster than Git!)
+# 2. Work with AVC (faster than Git!)
 avc add new-feature.c
 avc commit -m "Added awesome feature"
 
-# 4. Export AVC changes to Git format  
-avc agcl sync-to-git
-
-# 5. Push to Git remote for teammates
-git push origin main
+# 3. Share changes with Git teammates
+avc agcl push
 ```
 
 ## 📋 Complete Workflow Examples
@@ -73,8 +67,7 @@ git push -f origin main  # Force push new AVC history
 
 ```bash
 # Morning: Get teammate's Git changes
-git pull origin main
-avc agcl sync-from-git
+avc agcl pull
 
 # Work with AVC (enjoy the speed!)
 avc add src/
@@ -83,8 +76,7 @@ avc add tests/
 avc commit -m "Added comprehensive tests"
 
 # Afternoon: Share with Git teammates  
-avc agcl sync-to-git
-git push origin main
+avc agcl push
 ```
 
 ## 🔧 Troubleshooting
@@ -118,10 +110,10 @@ git push origin avc-migration
 ## 🎯 Best Practices
 
 ### **For AVC Users**
-1. **Always sync before/after Git operations**:
+1. **Use simple commands for Git collaboration**:
    ```bash
-   git pull && avc agcl sync-from-git  # Before work
-   avc agcl sync-to-git && git push    # After work
+   avc agcl pull  # Get changes from Git teammates
+   avc agcl push  # Share changes with Git teammates
    ```
 
 2. **Use AVC for local development**:

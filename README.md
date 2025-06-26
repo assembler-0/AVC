@@ -86,8 +86,9 @@
 |---------|-------------|--------------------|
 | `avc agcl migrate <url>` | Clone and convert Git repo to AVC | One-command migration |
 | `avc agcl git-init` | Initialize Git repo alongside AVC | Setup Git compatibility |
-| `avc agcl sync-to-git` | Convert AVC objects to Git format | Prepare for GitHub push |
-| `avc agcl sync-from-git` | Import Git objects to AVC format | Pull Git changes to AVC |
+| `avc agcl push` | Sync AVC to Git and push to origin | Share AVC changes with Git users |
+| `avc agcl pull` | Pull from Git and add to AVC | Get Git changes into AVC |
+| `avc agcl sync-to-git` | Convert AVC objects to Git format | Manual sync (advanced) |
 | `avc agcl verify-git` | Verify Git repository state | Debug conversion issues |
 
 ### Flags Reference
