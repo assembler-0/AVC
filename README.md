@@ -187,6 +187,6 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 ---
 
-**AVC v0.3.1 "Delta Spectre"** - The first version control system with bidirectional Git compatibility and seamless team collaboration.
+**AVC v0.3.0 "Delta Spectre"** - The first version control system with bidirectional Git compatibility and seamless team collaboration.
 
 *Built with ❤️ by Atheria*
