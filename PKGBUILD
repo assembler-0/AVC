@@ -6,20 +6,20 @@ pkgdesc="Archive Version Control - High-performance VCS with Git compatibility"
 arch=('x86_64' 'i686' 'aarch64')
 url="https://github.com/assembler-0/AVC"
 license=('GPL3')
-depends=('openssl' 'zlib' 'libdeflate' 'blake3')
-makedepends=('git' 'gcc' 'make' 'cmake')
+depends=('openssl' 'zlib' 'libdeflate' 'libblake3')
+makedepends=('git' 'gcc' 'make' 'cmake' )
 provides=('avc')
 conflicts=('avc')
-source=("git+https://github.com/assembler-0/AVC.git")
+source=("https://github.com/assembler-0/AVC.git")
 sha256sums=('SKIP')
 
 pkgver() {
-    cd "$srcdir/AVC"
+    cd "$srcdir"/*
     printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 build() {
-    cd "$srcdir/AVC"
+    cd "$srcdir"/*
     
     # Build with optimizations
     make clean || true
@@ -27,14 +27,14 @@ build() {
 }
 
 check() {
-    cd "$srcdir/AVC"
+    cd "$srcdir"/*
     
     # Basic functionality test
     make test || true
 }
 
 package() {
-    cd "$srcdir/AVC"
+    cd "$srcdir"/*
     
     # Install binary
     install -Dm755 "bin/avc" "$pkgdir/usr/bin/avc"
