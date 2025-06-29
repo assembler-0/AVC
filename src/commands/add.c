@@ -15,6 +15,57 @@
 #include <omp.h>
 #include <stdlib.h>
 
+// Check if path matches .avcignore patterns
+static int is_ignored(const char* path) {
+    static char** ignore_patterns = NULL;
+    static int pattern_count = 0;
+    static int patterns_loaded = 0;
+    
+    if (!patterns_loaded) {
+        patterns_loaded = 1;
+        FILE* ignore_file = fopen(".avcignore", "r");
+        if (ignore_file) {
+            char line[1024];
+            int capacity = 10;
+            ignore_patterns = malloc(capacity * sizeof(char*));
+            
+            while (fgets(line, sizeof(line), ignore_file)) {
+                // Remove newline and skip empty lines/comments
+                line[strcspn(line, "\n")] = '\0';
+                if (line[0] == '\0' || line[0] == '#') continue;
+                
+                if (pattern_count >= capacity) {
+                    capacity *= 2;
+                    ignore_patterns = realloc(ignore_patterns, capacity * sizeof(char*));
+                }
+                ignore_patterns[pattern_count++] = strdup2(line);
+            }
+            fclose(ignore_file);
+        }
+    }
+    
+    // Check patterns
+    for (int i = 0; i < pattern_count; i++) {
+        const char* pattern = ignore_patterns[i];
+        const char* check_path = path;
+        
+        // Remove ./ prefix for matching
+        if (strncmp(check_path, "./", 2) == 0) check_path += 2;
+        
+        // Simple pattern matching
+        if (strcmp(pattern, check_path) == 0) return 1;
+        if (strstr(check_path, pattern) != NULL) return 1;
+        
+        // Directory pattern (ends with /)
+        size_t pattern_len = strlen(pattern);
+        if (pattern_len > 0 && pattern[pattern_len-1] == '/') {
+            if (strncmp(check_path, pattern, pattern_len-1) == 0) return 1;
+        }
+    }
+    
+    return 0;
+}
+
 static int should_skip_path(const char* path) {
     // Skip .git/ or .avc/ directories and their contents
     if (strstr(path, "/.git/") != NULL || strstr(path, "/.avc/") != NULL) return 1;
@@ -25,6 +76,8 @@ static int should_skip_path(const char* path) {
     if (path[0] == '/') return 1;
     // Skip parent directory references
     if (strstr(path, "..") != NULL) return 1;
+    // Check .avcignore patterns
+    if (is_ignored(path)) return 1;
     return 0;
 }
 

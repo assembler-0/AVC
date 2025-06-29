@@ -46,6 +46,7 @@
 - **Incremental staging** - `avc add file1.txt file2.txt` works properly
 - **Hierarchical tree structure** - Preserves directory hierarchy (unlike flat storage)
 - **Empty directory support** - Optional preservation with `-e` flag
+- **.avcignore support** - Skip files/directories using ignore patterns
 - **Multi-threaded operations** - Parallel processing for speed
 - **Intelligent compression** - Smart libdeflate compression with size optimization
 - **Cross-platform builds** - ARM/portable build support
@@ -79,7 +80,7 @@ avc init
 avc add file.txt
 avc add folder/
 
-# Add all files in current directory
+# Add all files in current directory (respects .avcignore)
 avc add .
 
 # Add with empty directory preservation
@@ -144,6 +145,17 @@ avc agcl migrate https://github.com/user/repo.git
 - `--clean` - Wipe working directory before reset
 - `-f`, `--fast` - Use fast compression for speed
 - `-e`, `--empty-dirs` - Preserve empty directories (creates .avckeep files)
+
+### .avcignore File
+Create a `.avcignore` file to exclude files/directories:
+```
+# Comments start with #
+*.log
+temp/
+build/
+node_modules/
+.DS_Store
+```
 
 ## 🏗️ Architecture
 

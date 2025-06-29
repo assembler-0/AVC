@@ -95,6 +95,35 @@ avc add --empty-dirs folder/
 - Only created when `-e` or `--empty-dirs` flag is used
 - Works with any path: `avc add -e .` or `avc add -e specific/folder/`
 
+## 🚫 .avcignore File Support
+
+### Ignore Patterns
+Create a `.avcignore` file in your repository root to exclude files/directories:
+
+```
+# Comments start with #
+*.log
+*.tmp
+temp/
+build/
+node_modules/
+.DS_Store
+__pycache__/
+*.pyc
+```
+
+**Pattern Types:**
+- `filename.ext` - Exact filename match
+- `*.ext` - All files with extension (matches anywhere in path)
+- `directory/` - Directory and all contents
+- `path/to/file` - Specific path
+
+**Notes:**
+- Patterns are checked against relative paths
+- Comments start with `#`
+- Empty lines are ignored
+- Similar to `.gitignore` but simpler pattern matching
+
 ---
 
 **Remember**: AVC follows Git's staging area model. Only staged files are included in commits!
