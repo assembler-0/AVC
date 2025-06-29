@@ -45,6 +45,170 @@ static void configure_parallel_processing() {
     printf("Using %d threads for parallel processing\n", num_cores);
 }
 
+// Tree node structure for building hierarchical trees
+typedef struct tree_node {
+    char name[256];
+    char hash[65];
+    unsigned int mode;
+    int is_dir;
+    struct tree_node* children;
+    struct tree_node* next;
+    int child_count;
+} tree_node_t;
+
+// Create a new tree node
+static tree_node_t* create_tree_node(const char* name, const char* hash, unsigned int mode, int is_dir) {
+    tree_node_t* node = calloc(1, sizeof(tree_node_t));
+    if (!node) return NULL;
+    
+    strncpy(node->name, name, sizeof(node->name) - 1);
+    if (hash) strncpy(node->hash, hash, sizeof(node->hash) - 1);
+    node->mode = mode;
+    node->is_dir = is_dir;
+    return node;
+}
+
+// Find or create child node
+static tree_node_t* find_or_create_child(tree_node_t* parent, const char* name) {
+    tree_node_t* child = parent->children;
+    while (child) {
+        if (strcmp(child->name, name) == 0) {
+            return child;
+        }
+        child = child->next;
+    }
+    
+    // Create new directory child
+    child = create_tree_node(name, NULL, 040000, 1);
+    if (!child) return NULL;
+    
+    child->next = parent->children;
+    parent->children = child;
+    parent->child_count++;
+    return child;
+}
+
+// Add file to tree structure
+static int add_file_to_tree(tree_node_t* root, const char* filepath, const char* hash, unsigned int mode) {
+    char path_copy[512];
+    strncpy(path_copy, filepath, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+    
+    // Skip ./ prefix if present
+    char* path = path_copy;
+    if (strncmp(path, "./", 2) == 0) {
+        path += 2;
+    }
+    
+    tree_node_t* current = root;
+    char* token = strtok(path, "/");
+    char* next_token = NULL;
+    
+    while (token) {
+        next_token = strtok(NULL, "/");
+        
+        if (next_token) {
+            // This is a directory component
+            current = find_or_create_child(current, token);
+            if (!current) return -1;
+        } else {
+            // This is the file component
+            tree_node_t* file_node = create_tree_node(token, hash, mode, 0);
+            if (!file_node) return -1;
+            
+            file_node->next = current->children;
+            current->children = file_node;
+            current->child_count++;
+        }
+        
+        token = next_token;
+    }
+    
+    return 0;
+}
+
+// Compare tree nodes for sorting
+static int compare_tree_nodes(const void* a, const void* b) {
+    const tree_node_t* node_a = *(const tree_node_t**)a;
+    const tree_node_t* node_b = *(const tree_node_t**)b;
+    return strcmp(node_a->name, node_b->name);
+}
+
+// Create tree object from tree node (recursive)
+static int create_tree_object_recursive(tree_node_t* node, char* tree_hash_out) {
+    if (!node->children) {
+        // Empty tree
+        return store_object("tree", "", 0, tree_hash_out);
+    }
+    
+    // Collect children into array for sorting
+    tree_node_t** children_array = malloc(node->child_count * sizeof(tree_node_t*));
+    if (!children_array) return -1;
+    
+    tree_node_t* child = node->children;
+    int idx = 0;
+    while (child && idx < node->child_count) {
+        children_array[idx++] = child;
+        child = child->next;
+    }
+    
+    // Sort children alphabetically
+    qsort(children_array, node->child_count, sizeof(tree_node_t*), compare_tree_nodes);
+    
+    // Build tree content
+    size_t content_size = 0;
+    char* tree_content = malloc(node->child_count * 512); // Estimate size
+    if (!tree_content) {
+        free(children_array);
+        return -1;
+    }
+    
+    for (int i = 0; i < node->child_count; i++) {
+        tree_node_t* child_node = children_array[i];
+        
+        if (child_node->is_dir) {
+            // Recursively create subtree
+            char subtree_hash[65];
+            if (create_tree_object_recursive(child_node, subtree_hash) != 0) {
+                free(tree_content);
+                free(children_array);
+                return -1;
+            }
+            
+            int entry_len = snprintf(tree_content + content_size, 512,
+                                   "%o %s %s\n", 040000, child_node->name, subtree_hash);
+            content_size += entry_len;
+        } else {
+            // File entry
+            int entry_len = snprintf(tree_content + content_size, 512,
+                                   "%o %s %s\n", child_node->mode, child_node->name, child_node->hash);
+            content_size += entry_len;
+        }
+    }
+    
+    free(children_array);
+    
+    // Store tree object
+    int result = store_object("tree", tree_content, content_size, tree_hash_out);
+    free(tree_content);
+    
+    return result;
+}
+
+// Free tree structure
+static void free_tree_node(tree_node_t* node) {
+    if (!node) return;
+    
+    tree_node_t* child = node->children;
+    while (child) {
+        tree_node_t* next = child->next;
+        free_tree_node(child);
+        child = next;
+    }
+    
+    free(node);
+}
+
 int create_tree(char* tree_hash) {
     // Use fast index for O(1) operations
     fast_index_t* fast_idx = fast_index_create();
@@ -60,73 +224,43 @@ int create_tree(char* tree_hash) {
         return -1;
     }
     
-    // Allocate array for file entries
-    file_entry_t* files = malloc(fast_idx->count * sizeof(file_entry_t));
-    if (!files) {
-        fprintf(stderr, "Memory allocation failed\n");
+    // Create root tree node
+    tree_node_t* root = create_tree_node("", NULL, 040000, 1);
+    if (!root) {
+        fprintf(stderr, "Failed to create root tree node\n");
         fast_index_free(fast_idx);
         return -1;
     }
     
-    // Collect file information from hash table
-    int idx = 0;
+    // Build hierarchical tree structure
+    printf("Building hierarchical tree with %zu files...\n", fast_idx->count);
+    
     for (int i = 0; i < FAST_INDEX_SIZE; i++) {
         index_entry_t* entry = fast_idx->buckets[i];
-        while (entry && idx < fast_idx->count) {
-            strcpy(files[idx].hash, entry->hash);
-            strcpy(files[idx].filepath, entry->path);
-            files[idx].mode = entry->mode;
-            
-            // Pre-create entry string
-            files[idx].entry_len = snprintf(files[idx].entry, sizeof(files[idx].entry), 
-                                          "%o %s %s\n", entry->mode, entry->path, entry->hash);
-            idx++;
+        while (entry) {
+            if (add_file_to_tree(root, entry->path, entry->hash, entry->mode) != 0) {
+                fprintf(stderr, "Failed to add file to tree: %s\n", entry->path);
+                free_tree_node(root);
+                fast_index_free(fast_idx);
+                return -1;
+            }
             entry = entry->next;
         }
     }
     
     fast_index_free(fast_idx);
     
-    int actual_file_count = idx;
+    // Create tree objects recursively
+    printf("Creating tree objects...\n");
+    int result = create_tree_object_recursive(root, tree_hash);
     
-    // Sort entries for consistent tree creation (O(N log N))
-    qsort(files, actual_file_count, sizeof(file_entry_t), file_entry_cmp);
+    free_tree_node(root);
     
-    // Calculate total size needed for tree content
-    size_t total_size = 0;
-    for (int i = 0; i < actual_file_count; i++) {
-        total_size += files[i].entry_len;
-    }
-    
-    // Allocate tree content buffer
-    char* tree_content = malloc(total_size + 1);
-    if (!tree_content) {
-        fprintf(stderr, "Memory allocation failed\n");
-        free(files);
+    if (result != 0) {
+        fprintf(stderr, "Failed to create tree objects\n");
         return -1;
     }
     
-    // Build tree content
-    size_t offset = 0;
-    printf("Creating tree with %d files...\n", actual_file_count);
-    
-    for (int i = 0; i < actual_file_count; i++) {
-        memcpy(tree_content + offset, files[i].entry, files[i].entry_len);
-        offset += files[i].entry_len;
-    }
-    tree_content[total_size] = '\0';
-    
-    free(files);
-    
-    // Generate tree hash
-    printf("Storing tree object...\n");
-    int result = store_object("tree", tree_content, strlen(tree_content), tree_hash);
-    free(tree_content);
-
-    if (result == -1) {
-        return -1;
-    }
-
     return 0;
 }
 

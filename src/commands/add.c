@@ -142,11 +142,11 @@ int cmd_add(int argc, char* argv[]) {
         struct stat st;
         if (stat(file_paths[i], &st) == -1) continue;
         
-        // Normalize file path to match index format (add "./" prefix if not present)
+        // Normalize file path to relative format (never use absolute paths)
         char normalized_path[1024];
         if (file_paths[i][0] == '/') {
-            // Absolute path, use as is
-            strcpy(normalized_path, file_paths[i]);
+            // Skip absolute paths to prevent Git issues
+            continue;
         } else if (strncmp(file_paths[i], "./", 2) == 0) {
             // Already has "./" prefix
             strcpy(normalized_path, file_paths[i]);
@@ -181,10 +181,11 @@ int cmd_add(int argc, char* argv[]) {
     int unchanged_count = 0;
     for (size_t i = 0; i < file_count; ++i) {
         if (changed[i]) {
-            // Normalize file path for index operations
+            // Normalize file path for index operations (relative paths only)
             char normalized_path[1024];
             if (file_paths[i][0] == '/') {
-                strcpy(normalized_path, file_paths[i]);
+                // Skip absolute paths
+                continue;
             } else if (strncmp(file_paths[i], "./", 2) == 0) {
                 strcpy(normalized_path, file_paths[i]);
             } else {

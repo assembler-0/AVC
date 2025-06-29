@@ -316,15 +316,14 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
             char filepath[256], avc_hash_entry[65];
             
             if (sscanf(line_start, "%o %255s %64s", &mode, filepath, avc_hash_entry) == 3) {
-                // Extract just filename
-                char* filename = strrchr(filepath, '/');
-                if (filename) {
-                    filename++; // Skip '/'
-                } else {
-                    filename = filepath;
+                // Use the full relative path as stored in AVC tree
+                char* filename = filepath;
+                // Remove ./ prefix if present for Git compatibility
+                if (strncmp(filename, "./", 2) == 0) {
+                    filename += 2;
                 }
                 
-                // Check for duplicates
+                // Check for duplicates (should not happen with hierarchical trees)
                 int is_duplicate = 0;
                 for (int i = 0; i < entry_count; i++) {
                     if (strcmp(entries[i].filename, filename) == 0) {
@@ -1061,7 +1060,7 @@ static int convert_git_tree_to_avc(const char* git_hash, char* avc_hash_out) {
             convert_git_blob_to_avc(git_entry_hash, avc_entry_hash);
         }
         
-        // Write AVC tree entry: "mode filename hash\n"
+        // Write AVC tree entry: "mode filepath hash\n" (preserve full path)
         avc_offset += snprintf(avc_tree_content + avc_offset, 
                               tree_size * 2 - avc_offset,
                               "%o %s %s\n", mode, filename, avc_entry_hash);
