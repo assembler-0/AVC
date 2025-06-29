@@ -44,6 +44,8 @@
 - **Mixed team collaboration** - AVC users work with Git users seamlessly
 - **BLAKE3 content addressing** - Fast, secure, collision-resistant hashing
 - **Incremental staging** - `avc add file1.txt file2.txt` works properly
+- **Hierarchical tree structure** - Preserves directory hierarchy (unlike flat storage)
+- **Empty directory support** - Optional preservation with `-e` flag
 - **Multi-threaded operations** - Parallel processing for speed
 - **Intelligent compression** - Smart libdeflate compression with size optimization
 - **Cross-platform builds** - ARM/portable build support
@@ -66,13 +68,56 @@
 - **Robust error handling** - Detailed error messages and recovery
 - **Large file optimization** - 1MB chunks and 1GB file size support
 
+## 📖 Usage Examples
+
+### Basic Operations
+```bash
+# Initialize repository
+avc init
+
+# Add files (basic)
+avc add file.txt
+avc add folder/
+
+# Add all files in current directory
+avc add .
+
+# Add with empty directory preservation
+avc add -e .
+avc add --empty-dirs folder/
+
+# Add with fast compression
+avc add -f large_file.zip
+
+# Combine flags
+avc add -ef .  # Fast compression + preserve empty dirs
+
+# Commit changes
+avc commit -m "Your commit message"
+```
+
+### Git Compatibility (AGCL)
+```bash
+# Setup Git compatibility
+avc agcl git-init
+
+# Push to GitHub/GitLab
+avc agcl push
+
+# Pull from remote
+avc agcl pull
+
+# Migrate existing Git repo
+avc agcl migrate https://github.com/user/repo.git
+```
+
 ## 🔧 Command Reference
 
 ### Core Commands
 | Command | Description | Options            |
 |---------|-------------|--------------------|
 | `avc init` | Initialize new repository | None               |
-| `avc add <path>` | Add files/directories to staging | `f`, `--fast`      |
+| `avc add <path>` | Add files/directories to staging | `-f`, `--fast`, `-e`, `--empty-dirs` |
 | `avc commit` | Commit staged changes | `-m <msg>`         |
 | `avc status` | Show repository status | None               |
 | `avc log` | Show commit history | None               |
@@ -97,7 +142,8 @@
 - `--cached` - Only remove from staging area
 - `--hard` - Reset working directory
 - `--clean` - Wipe working directory before reset
-- `--fast` - Compression level 0 for speed
+- `-f`, `--fast` - Use fast compression for speed
+- `-e`, `--empty-dirs` - Preserve empty directories (creates .avckeep files)
 
 ## 🏗️ Architecture
 

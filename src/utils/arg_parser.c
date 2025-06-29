@@ -63,6 +63,14 @@ parsed_args_t* parse_args(int argc, char* argv[], const char* valid_flags) {
                     free_parsed_args(args);
                     return NULL;
                 }
+            } else if (strcmp(arg, "--empty-dirs") == 0 || strcmp(arg, "-e") == 0) {
+                if (strchr(valid_flags, 'e')) {
+                    args->flags |= FLAG_EMPTY_DIRS;
+                } else {
+                    fprintf(stderr, "Error: --empty-dirs flag not valid for this command\n");
+                    free_parsed_args(args);
+                    return NULL;
+                }
             } else if (strcmp(arg, "-m") == 0) {
                 if (strchr(valid_flags, 'm')) {
                     if (i + 1 < argc) {

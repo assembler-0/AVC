@@ -8,12 +8,12 @@ This document collects *all* build and installation details in one place so the 
 
 AVC is developed primarily on Linux, but it should compile fine on macOS and the BSD family as long as the prerequisites are met.  Windows support is on the roadmap via **MSYS2/MinGW**.
 
-| Platform | Status                  |
-|----------|-------------------------|
-| Linux (x86-64) | ✅ Fully Supported       |
-| Linux (ARM64)  | ✅ Supported (portable build) |
-| macOS (Intel & Apple-Silicon) | ✅ Supported (portable build) |
-| Windows (MSYS2) | ⚠️ Untested             |
+| Platform | Status                    |
+|----------|---------------------------|
+| Linux (x86-64) | ✅ Fully Supported         |
+| Linux (ARM64)  | ⚠️ Untested               |
+| macOS (Intel & Apple-Silicon) | ⚠️ Untested               |
+| Windows (MSYS2) | ⚠️ Untested (should work) |
 
 ---
 

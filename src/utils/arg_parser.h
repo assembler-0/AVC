@@ -18,6 +18,7 @@ typedef struct {
 #define FLAG_HARD            (1 << 2)
 #define FLAG_CLEAN           (1 << 3)
 #define FLAG_FAST            (1 << 4)
+#define FLAG_EMPTY_DIRS      (1 << 5)
 
 // Function to parse command line arguments
 parsed_args_t* parse_args(int argc, char* argv[], const char* valid_flags);

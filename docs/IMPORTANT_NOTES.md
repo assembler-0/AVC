@@ -72,6 +72,29 @@ git pull origin main  # If you have a backup on remote
 4. **Test with small repos** before using on large projects
 5. **Understand staging area** behavior before advanced usage
 
+## 📁 Empty Directory Preservation
+
+### .avckeep Files
+AVC can preserve empty directories using `.avckeep` placeholder files:
+
+```bash
+# Preserve empty directories
+avc add -e .
+avc add --empty-dirs folder/
+```
+
+**What happens:**
+- AVC detects empty directories during `avc add -e`
+- Creates `.avckeep` files in empty directories
+- These files contain comments explaining their purpose
+- Empty directories are preserved in commits and Git pushes
+
+**Notes:**
+- `.avckeep` files are safe to delete if directory gets other files
+- Similar to `.gitkeep` convention used by Git users
+- Only created when `-e` or `--empty-dirs` flag is used
+- Works with any path: `avc add -e .` or `avc add -e specific/folder/`
+
 ---
 
 **Remember**: AVC follows Git's staging area model. Only staged files are included in commits!

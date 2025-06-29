@@ -16,9 +16,11 @@
 #include <stdlib.h>
 
 static int should_skip_path(const char* path) {
-    // Skip .git/ or .avc/ directories (not files containing .git)
+    // Skip .git/ or .avc/ directories and their contents
     if (strstr(path, "/.git/") != NULL || strstr(path, "/.avc/") != NULL) return 1;
+    if (strstr(path, "/.git") != NULL || strstr(path, "/.avc") != NULL) return 1;
     if (strcmp(path, ".git") == 0 || strcmp(path, ".avc") == 0) return 1;
+    if (strncmp(path, ".git/", 5) == 0 || strncmp(path, ".avc/", 5) == 0) return 1;
     // Skip absolute paths
     if (path[0] == '/') return 1;
     // Skip parent directory references
@@ -26,7 +28,7 @@ static int should_skip_path(const char* path) {
     return 0;
 }
 
-static void collect_files(const char* path, char*** paths, size_t* count, size_t* cap) {
+static void collect_files(const char* path, char*** paths, size_t* count, size_t* cap, int preserve_empty_dirs) {
     if (should_skip_path(path)) return;
     struct stat st;
     if (stat(path, &st) == -1) return;  // Use stat to match find behavior
@@ -42,6 +44,7 @@ static void collect_files(const char* path, char*** paths, size_t* count, size_t
         memcpy(child_buf, path, path_len);
         child_buf[path_len] = '/';
         
+        int has_children = 0;
         while ((e = readdir(d))) {
             // Fast dot-file check
             if (e->d_name[0] == '.' && 
@@ -50,8 +53,39 @@ static void collect_files(const char* path, char*** paths, size_t* count, size_t
             // Build path in pre-allocated buffer
             strcpy(child_buf + path_len + 1, e->d_name);
             if (should_skip_path(child_buf)) continue;
-            collect_files(child_buf, paths, count, cap);
+            
+            has_children = 1;
+            collect_files(child_buf, paths, count, cap, preserve_empty_dirs);
         }
+        
+        // If directory is empty and preservation is enabled, create a placeholder .avckeep file
+        if (!has_children && preserve_empty_dirs) {
+            char keep_file_path[1024];
+            snprintf(keep_file_path, sizeof(keep_file_path), "%s/.avckeep", path);
+            
+            // Check if .avckeep file already exists
+            struct stat keep_st;
+            if (stat(keep_file_path, &keep_st) == -1) {
+                // Create the .avckeep file if it doesn't exist
+                FILE* keep_file = fopen(keep_file_path, "w");
+                if (keep_file) {
+                    // Write a comment explaining the purpose
+                    fprintf(keep_file, "# This file preserves the empty directory in AVC\n");
+                    fprintf(keep_file, "# You can safely delete this file if the directory contains other files\n");
+                    fclose(keep_file);
+                    printf("Created .avckeep file for empty directory: %s\n", path);
+                }
+            }
+            
+            // Add the .avckeep file to the collection (whether new or existing)
+            if (*count >= *cap) {
+                *cap = *cap ? *cap * 2 : 2048;
+                *paths = realloc(*paths, *cap * sizeof(char*));
+            }
+            (*paths)[*count] = strdup2(keep_file_path);
+            (*count)++;
+        }
+        
         closedir(d);
     } else if (S_ISREG(st.st_mode)) {
         // Grow array more aggressively
@@ -70,9 +104,12 @@ int cmd_add(int argc, char* argv[]) {
     }
 
     // Parse command line options using the unified parser
-    parsed_args_t* args = parse_args(argc, argv, "f"); // Supports --fast/-f
+    parsed_args_t* args = parse_args(argc, argv, "fe"); // Supports --fast/-f and --empty-dirs/-e
     if (!args) {
-        fprintf(stderr, "Usage: avc add <file>...\n");
+        fprintf(stderr, "Usage: avc add <file>... [options]\n");
+        fprintf(stderr, "Options:\n");
+        fprintf(stderr, "  -f, --fast        Use fast compression\n");
+        fprintf(stderr, "  -e, --empty-dirs  Preserve empty directories\n");
         return 1;
     }
 
@@ -83,6 +120,9 @@ int cmd_add(int argc, char* argv[]) {
     if (has_flag(args, FLAG_FAST)) {
         objects_set_fast_mode(1);
     }
+    
+    // Check if empty directory preservation is enabled
+    int preserve_empty_dirs = has_flag(args, FLAG_EMPTY_DIRS);
 
     if (positional_count == 0) {
         fprintf(stderr, "Usage: avc add <file>...\n");
@@ -97,7 +137,7 @@ int cmd_add(int argc, char* argv[]) {
     // forward declaration
 
 
-    for (int i = 0; i < positional_count; ++i) collect_files(positional[i], &file_paths, &file_count, &file_cap);
+    for (int i = 0; i < positional_count; ++i) collect_files(positional[i], &file_paths, &file_count, &file_cap, preserve_empty_dirs);
 
     if (!file_count) {
         fprintf(stderr, "Nothing to add\n");
