@@ -22,13 +22,13 @@
 ## 🚀 Performance Highlights
 
 ### Benchmark Results (95000+ files)
-| Operation                        | AVC    | Git     | Performance               |
-|----------------------------------|--------|---------|---------------------------|
-| **Init**                         | 0.001  | 0.001s  | ⚡ Equal                   |
-| **Add**                          | 2.6s   | 11.358s | ⚡ Up to **4.4x** faster   |
-| **Commit**                       | 0.188s | 5.766s  | 🚀 **Up to 30.7x faster** |
-| **Reset****                      | 2.813s | 3.236s  | ⚡ 1.2x faster             |
-| **Size (pre-commit)** | 540MB  | 634MB   | 💾 **Up to 1.2x smaller** |
+| Operation                        | AVC   | Git     | Performance               |
+|----------------------------------|-------|---------|---------------------------|
+| **Init**                         | 0.001 | 0.001s  | ⚡ Equal                   |
+| **Add**                          | 2.6s  | 11.358s | ⚡ Up to **4.4x** faster   |
+| **Commit**                       | 0.4s  | 5.766s  | 🚀 **Up to 14.1x faster** |
+| **Reset****                      | 0.854s | 3.236s  | ⚡ 3.8x faster             |
+| **Size (pre-commit)** | 540MB | 634MB   | 💾 **Up to 1.2x smaller** |
 
 **Best run*
 

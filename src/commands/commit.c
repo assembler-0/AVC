@@ -41,8 +41,6 @@ static void configure_parallel_processing() {
     #ifdef _GNU_SOURCE
     omp_set_schedule(omp_sched_dynamic, 1);
     #endif
-    
-    printf("Using %d threads for parallel processing\n", num_cores);
 }
 
 // Tree node structure for building hierarchical trees
@@ -60,7 +58,7 @@ typedef struct tree_node {
 static tree_node_t* create_tree_node(const char* name, const char* hash, unsigned int mode, int is_dir) {
     tree_node_t* node = calloc(1, sizeof(tree_node_t));
     if (!node) return NULL;
-    
+
     strncpy(node->name, name, sizeof(node->name) - 1);
     if (hash) strncpy(node->hash, hash, sizeof(node->hash) - 1);
     node->mode = mode;
@@ -77,11 +75,11 @@ static tree_node_t* find_or_create_child(tree_node_t* parent, const char* name) 
         }
         child = child->next;
     }
-    
+
     // Create new directory child
     child = create_tree_node(name, NULL, 040000, 1);
     if (!child) return NULL;
-    
+
     child->next = parent->children;
     parent->children = child;
     parent->child_count++;
@@ -93,20 +91,20 @@ static int add_file_to_tree(tree_node_t* root, const char* filepath, const char*
     char path_copy[512];
     strncpy(path_copy, filepath, sizeof(path_copy) - 1);
     path_copy[sizeof(path_copy) - 1] = '\0';
-    
+
     // Skip ./ prefix if present
     char* path = path_copy;
     if (strncmp(path, "./", 2) == 0) {
         path += 2;
     }
-    
+
     tree_node_t* current = root;
     char* token = strtok(path, "/");
     char* next_token = NULL;
-    
+
     while (token) {
         next_token = strtok(NULL, "/");
-        
+
         if (next_token) {
             // This is a directory component
             current = find_or_create_child(current, token);
@@ -115,15 +113,15 @@ static int add_file_to_tree(tree_node_t* root, const char* filepath, const char*
             // This is the file component
             tree_node_t* file_node = create_tree_node(token, hash, mode, 0);
             if (!file_node) return -1;
-            
+
             file_node->next = current->children;
             current->children = file_node;
             current->child_count++;
         }
-        
+
         token = next_token;
     }
-    
+
     return 0;
 }
 
@@ -140,21 +138,21 @@ static int create_tree_object_recursive(tree_node_t* node, char* tree_hash_out) 
         // Empty tree
         return store_object("tree", "", 0, tree_hash_out);
     }
-    
+
     // Collect children into array for sorting
     tree_node_t** children_array = malloc(node->child_count * sizeof(tree_node_t*));
     if (!children_array) return -1;
-    
+
     tree_node_t* child = node->children;
     int idx = 0;
     while (child && idx < node->child_count) {
         children_array[idx++] = child;
         child = child->next;
     }
-    
+
     // Sort children alphabetically
     qsort(children_array, node->child_count, sizeof(tree_node_t*), compare_tree_nodes);
-    
+
     // Build tree content
     size_t content_size = 0;
     char* tree_content = malloc(node->child_count * 512); // Estimate size
@@ -162,10 +160,10 @@ static int create_tree_object_recursive(tree_node_t* node, char* tree_hash_out) 
         free(children_array);
         return -1;
     }
-    
+
     for (int i = 0; i < node->child_count; i++) {
         tree_node_t* child_node = children_array[i];
-        
+
         if (child_node->is_dir) {
             // Recursively create subtree
             char subtree_hash[65];
@@ -174,7 +172,7 @@ static int create_tree_object_recursive(tree_node_t* node, char* tree_hash_out) 
                 free(children_array);
                 return -1;
             }
-            
+
             int entry_len = snprintf(tree_content + content_size, 512,
                                    "%o %s %s\n", 040000, child_node->name, subtree_hash);
             content_size += entry_len;
@@ -185,27 +183,27 @@ static int create_tree_object_recursive(tree_node_t* node, char* tree_hash_out) 
             content_size += entry_len;
         }
     }
-    
+
     free(children_array);
-    
+
     // Store tree object
     int result = store_object("tree", tree_content, content_size, tree_hash_out);
     free(tree_content);
-    
+
     return result;
 }
 
 // Free tree structure
 static void free_tree_node(tree_node_t* node) {
     if (!node) return;
-    
+
     tree_node_t* child = node->children;
     while (child) {
         tree_node_t* next = child->next;
         free_tree_node(child);
         child = next;
     }
-    
+
     free(node);
 }
 
@@ -217,13 +215,13 @@ int create_tree(char* tree_hash) {
         if (fast_idx) fast_index_free(fast_idx);
         return -1;
     }
-    
+
     if (fast_idx->count == 0) {
         fprintf(stderr, "No files to commit (index is empty)\n");
         fast_index_free(fast_idx);
         return -1;
     }
-    
+
     // Create root tree node
     tree_node_t* root = create_tree_node("", NULL, 040000, 1);
     if (!root) {
@@ -231,10 +229,8 @@ int create_tree(char* tree_hash) {
         fast_index_free(fast_idx);
         return -1;
     }
-    
+
     // Build hierarchical tree structure
-    printf("Building hierarchical tree with %zu files...\n", fast_idx->count);
-    
     for (int i = 0; i < FAST_INDEX_SIZE; i++) {
         index_entry_t* entry = fast_idx->buckets[i];
         while (entry) {
@@ -247,20 +243,19 @@ int create_tree(char* tree_hash) {
             entry = entry->next;
         }
     }
-    
+
     fast_index_free(fast_idx);
-    
+
     // Create tree objects recursively
-    printf("Creating tree objects...\n");
     int result = create_tree_object_recursive(root, tree_hash);
-    
+
     free_tree_node(root);
-    
+
     if (result != 0) {
         fprintf(stderr, "Failed to create tree objects\n");
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -386,19 +381,20 @@ int cmd_commit(int argc, char* argv[]) {
 
     tui_header("Creating Commit");
     clock_t start_time = clock();
-    
-    spinner_t* commit_spinner = spinner_create("Starting commit process");
+
+    spinner_t* commit_spinner = spinner_create("Configuring parallel processing...");
     spinner_update(commit_spinner);
 
     // Configure OpenMP
     configure_parallel_processing();
-    spinner_stop(commit_spinner);
-    spinner_free(commit_spinner);
 
     // Create tree from index
-    printf("Creating tree object...\n");
+    spinner_set_label(commit_spinner, "Building hierarchical tree...");
+    spinner_update(commit_spinner);
     char tree_hash[65]; // Updated to 65 for SHA-256
     if (create_tree(tree_hash) == -1) {
+        spinner_stop(commit_spinner);
+        spinner_free(commit_spinner);
         free_parsed_args(args);
         return 1;
     }
@@ -408,12 +404,13 @@ int cmd_commit(int argc, char* argv[]) {
     get_current_commit(parent_hash);
 
     // Create commit object
-    printf("Creating commit object...\n");
+    spinner_set_label(commit_spinner, "Creating commit object...");
+    spinner_update(commit_spinner);
     char commit_content[2048];
     time_t now = time(NULL);
     char* author = getenv("USER");
     if (!author) author = "unknown";
-    
+
     // Get email from environment or use default
     char* email = getenv("EMAIL");
     if (!email) email = "user@example.com";
@@ -436,22 +433,33 @@ int cmd_commit(int argc, char* argv[]) {
     // Generate commit hash and store object
     char commit_hash[65]; // Updated to 65 for SHA-256
     if (store_object("commit", commit_content, strlen(commit_content), commit_hash) == -1) {
+        spinner_stop(commit_spinner);
+        spinner_free(commit_spinner);
         fprintf(stderr, "Failed to create commit object\n");
         free_parsed_args(args);
         return 1;
     }
 
     // Update HEAD
+    spinner_set_label(commit_spinner, "Updating HEAD...");
+    spinner_update(commit_spinner);
     if (update_head(commit_hash) == -1) {
+        spinner_stop(commit_spinner);
+        spinner_free(commit_spinner);
         fprintf(stderr, "Failed to update HEAD\n");
         free_parsed_args(args);
         return 1;
     }
 
     // Clear index
+    spinner_set_label(commit_spinner, "Clearing index...");
+    spinner_update(commit_spinner);
     if (clear_index() == -1) {
         fprintf(stderr, "Warning: Failed to clear index after commit\n");
     }
+
+    spinner_stop(commit_spinner);
+    spinner_free(commit_spinner);
 
     clock_t end_time = clock();
     double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;

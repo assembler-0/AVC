@@ -106,6 +106,7 @@ target_link_libraries(avc_core PUBLIC
         OpenSSL::SSL
         OpenSSL::Crypto
         z
+        m
 )
 # BLAKE3 SIMD configuration
 if(AVC_PORTABLE_BUILD)

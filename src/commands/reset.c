@@ -15,32 +15,30 @@
 #include "arg_parser.h"
 #include "fast_index.h"
 #include "tui.h"
-// Helper function to create directory recursively
+// Fast directory creation with minimal stat calls
 int create_directory_recursive(const char* path) {
-    char* path_copy = strdup2(path);
-    if (!path_copy) return -1;
-
-    char* dir = dirname(path_copy);
+    char path_buf[1024];
+    strncpy(path_buf, path, sizeof(path_buf) - 1);
+    path_buf[sizeof(path_buf) - 1] = '\0';
+    
+    char* dir = dirname(path_buf);
     if (strcmp(dir, ".") == 0 || strcmp(dir, "/") == 0) {
-        free(path_copy);
         return 0;
     }
-
-    struct stat st;
-    if (stat(dir, &st) == -1) {
-        if (create_directory_recursive(dir) == -1) {
-            free(path_copy);
-            return -1;
-        }
-        if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
-            perror("mkdir");
-            free(path_copy);
-            return -1;
+    
+    // Try to create directory first, then recurse only if needed
+    if (mkdir(dir, 0755) == 0 || errno == EEXIST) {
+        return 0;
+    }
+    
+    if (errno == ENOENT) {
+        // Parent doesn't exist, recurse
+        if (create_directory_recursive(dir) == 0) {
+            return mkdir(dir, 0755) == 0 || errno == EEXIST ? 0 : -1;
         }
     }
-
-    free(path_copy);
-    return 0;
+    
+    return -1;
 }
 
 // Recursively delete all files and directories except .avc, .git, .idea
@@ -66,6 +64,88 @@ static int clean_working_directory(const char* path) {
     }
     closedir(dir);
     return result;
+}
+
+// File entry for flattened tree
+typedef struct {
+    char path[1024];
+    char hash[65];
+    unsigned int mode;
+} file_entry_reset_t;
+
+// Recursively flatten hierarchical tree into file list
+static int flatten_tree_recursive(const char* tree_hash, const char* base_path, file_entry_reset_t** files, int* count, int* capacity) {
+    size_t tree_size;
+    char tree_type[16];
+    char* tree_content = load_object(tree_hash, &tree_size, tree_type);
+    
+    if (!tree_content || strcmp(tree_type, "tree") != 0) {
+        if (tree_content) free(tree_content);
+        return -1;
+    }
+    
+    char* tree_copy = malloc(tree_size + 1);
+    if (!tree_copy) {
+        free(tree_content);
+        return -1;
+    }
+    memcpy(tree_copy, tree_content, tree_size);
+    tree_copy[tree_size] = '\0';
+    free(tree_content);
+    
+    char* current_pos = tree_copy;
+    char* end_of_buffer = tree_copy + tree_size;
+    
+    while (current_pos < end_of_buffer) {
+        char* next_line = strchr(current_pos, '\n');
+        if (next_line) *next_line = '\0';
+        
+        if (strlen(current_pos) > 0) {
+            unsigned int mode;
+            char name[256], hash[65];
+            
+            if (sscanf(current_pos, "%o %255s %64s", &mode, name, hash) == 3) {
+                char full_path[1024];
+                if (strlen(base_path) > 0) {
+                    snprintf(full_path, sizeof(full_path), "%s/%s", base_path, name);
+                } else {
+                    strcpy(full_path, name);
+                }
+                
+                if (mode == 040000) {
+                    // Directory - recurse
+                    if (flatten_tree_recursive(hash, full_path, files, count, capacity) != 0) {
+                        free(tree_copy);
+                        return -1;
+                    }
+                } else {
+                    // File - add to flattened list
+                    if (*count >= *capacity) {
+                        *capacity = *capacity ? *capacity * 2 : 1024;
+                        *files = realloc(*files, *capacity * sizeof(file_entry_reset_t));
+                        if (!*files) {
+                            free(tree_copy);
+                            return -1;
+                        }
+                    }
+                    
+                    snprintf((*files)[*count].path, sizeof((*files)[*count].path), "./%s", full_path);
+                    strcpy((*files)[*count].hash, hash);
+                    (*files)[*count].mode = mode;
+                    (*count)++;
+                }
+            }
+        }
+        
+        if (next_line) {
+            current_pos = next_line + 1;
+        } else {
+            break;
+        }
+    }
+    
+    free(tree_copy);
+    return 0;
 }
 
 // Reset working directory to match a commit
@@ -153,63 +233,48 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
         return -1;
     }
 
-    // Parse tree content line by line - FIXED VERSION
-    char* tree_copy = malloc(tree_size + 1);
-    if (!tree_copy) {
-        fprintf(stderr, "Memory allocation failed\n");
-        free(tree_content);
+    // Flatten hierarchical tree into file list for batch processing
+    file_entry_reset_t* files = NULL;
+    int file_count = 0, file_capacity = 0;
+    
+    if (flatten_tree_recursive(tree_hash, "", &files, &file_count, &file_capacity) != 0) {
+        fprintf(stderr, "Failed to flatten tree structure\n");
+        fast_index_free(fast_idx);
+        if (files) free(files);
         return -1;
     }
-    memcpy(tree_copy, tree_content, tree_size);
-    tree_copy[tree_size] = '\0';
-    free(tree_content);
-
+    
+    // Batch process all files for maximum performance
     int files_processed = 0;
-    line_start = tree_copy;
-
-    while ((line_end = strchr(line_start, '\n')) != NULL) {
-        *line_end = '\0';
-
-        // Skip empty lines
-        if (strlen(line_start) == 0) {
-            line_start = line_end + 1;
-            continue;
+    for (int i = 0; i < file_count; i++) {
+        if (fast_index_set(fast_idx, files[i].path, files[i].hash, files[i].mode) == 0) {
+            files_processed++;
         }
-        
-        unsigned int mode;
-        char filepath[512], file_hash[65];
-
-        // Parse tree entry: "mode filepath hash"
-        if (sscanf(line_start, "%o %511s %64s", &mode, filepath, file_hash) == 3) {
-
-            // Add to fast index - O(1) operation
-            if (fast_index_set(fast_idx, filepath, file_hash, mode) == 0) {
-                files_processed++;
-            }
-            
-            if (hard_reset) {
-                // Load and restore file content for --hard reset
-                size_t file_size;
-                char file_type[16];
-                char* file_content = load_object(file_hash, &file_size, file_type);
-                
-                if (file_content && strcmp(file_type, "blob") == 0) {
-                    // Create directory structure if needed
-                    create_directory_recursive(filepath);
-                    
-                    // Write file to working directory (ignore errors)
-                    write_file(filepath, file_content, file_size);
-                    free(file_content);
-                }
-            }
-        } else {
-            printf("Skipping malformed tree entry: %s\n", line_start);
-        }
-
-        line_start = line_end + 1;
     }
-
-    free(tree_copy);
+    
+    // Parallel file restoration if hard reset
+    if (hard_reset) {
+        #pragma omp parallel for schedule(dynamic, 64)
+        for (int i = 0; i < file_count; i++) {
+            size_t file_size;
+            char file_type[16];
+            char* file_content = load_object(files[i].hash, &file_size, file_type);
+            
+            if (file_content && strcmp(file_type, "blob") == 0) {
+                // Remove ./ prefix for file creation
+                const char* file_path = files[i].path;
+                if (strncmp(file_path, "./", 2) == 0) file_path += 2;
+                
+                create_directory_recursive(file_path);
+                write_file(file_path, file_content, file_size);
+                free(file_content);
+            }
+        }
+    }
+    
+    free(files);
+    
+    free(tree_content);
     
     // Commit fast index to disk
     if (fast_index_commit(fast_idx) != 0) {
@@ -219,7 +284,7 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     }
     fast_index_free(fast_idx);
 
-    printf("Processed %d files from tree\n", files_processed);
+    printf("Processed %d files from hierarchical tree\n", files_processed);
 
     // Update HEAD to point to this commit
     FILE* head = fopen(".avc/HEAD", "r");

@@ -21,7 +21,7 @@ typedef struct {
 } spinner_t;
 
 // Initialize progress bar
-progress_bar_t* progress_create(const char* label, size_t total, int width);
+progress_bar_t* progress_create(const char* label, size_t total);
 
 // Update progress bar
 void progress_update(progress_bar_t* bar, size_t current);
@@ -43,6 +43,9 @@ void spinner_stop(spinner_t* spinner);
 
 // Free spinner
 void spinner_free(spinner_t* spinner);
+
+// Set spinner label
+void spinner_set_label(spinner_t* spinner, const char* label);
 
 // Utility functions
 void tui_clear_line(void);

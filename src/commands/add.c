@@ -218,7 +218,7 @@ int cmd_add(int argc, char* argv[]) {
 
     // Hash and store files with progress
     if (use_tui) {
-        hash_progress = progress_create("Processing files", file_count, 50);
+        hash_progress = progress_create("Processing files", file_count);
         progress_update(hash_progress, 0);
     }
     
