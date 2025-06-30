@@ -183,48 +183,6 @@ node_modules/
 - **Large buffer support** - 1MB compression buffers for big files
 - **Memory pool optimization** - Efficient allocation for large operations
 
-
-## 📊 Performance Tips
-
-### For Maximum Speed
-1. **Use multi-threaded operations** - Automatic CPU core utilization
-2. **Add files in batches** rather than individually
-3. **Use SSD storage** for better I/O performance
-4. **Ensure sufficient RAM** for parallel operations
-5. **Large files are optimized** - 1MB chunks and 1GB file support
-
-### For Maximum Compression
-1. **Consistent compression** - Pure zstd for reliability
-2. **Focus on text files** for best compression ratios
-3. **Large file handling** - Optimized for files up to 1GB
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our contributing guidelines:
-
-1. **Fork the repository**
-2. **Create a feature branch**
-3. **Make your changes**
-4. **Add tests if applicable**
-5. **Submit a pull request**
-
-### Development Setup
-```bash
-# Standard build (native optimizations)
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-
-# Portable build (ARM/cross-platform)
-cmake -DCMAKE_BUILD_TYPE=Release -DAVC_PORTABLE_BUILD=ON ..
-make -j$(nproc)
-
-# Debug build with sanitizers
-mkdir build-debug && cd build-debug
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-make
-```
-
 ## 📄 License
 
 This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) file for details.
@@ -244,6 +202,6 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 ---
 
-**AVC v0.3.0 "Delta Spectre"** - The first version control system with bidirectional Git compatibility and seamless team collaboration.
+**AVC v0.4.0 "Delta Spectre"** - The first version control system with bidirectional Git compatibility and seamless team collaboration.
 
 *Built with ❤️ by Atheria*
