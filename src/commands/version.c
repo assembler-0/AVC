@@ -23,7 +23,7 @@ int cmd_version(int argc, char* argv[]) {
     printf("\n");
     printf("Features:\n");
     printf("  • SHA-256 based content addressing\n");
-    printf("  • Fast libdeflate compression (level 6, optimized)\n");
+    printf("  • Fast zstd compression (level 6, optimized)\n");
     printf("  • BLAKE3 hashing (SHA-256 compatible)\n");
     printf("  • Smart compression detection\n");
     printf("  • Multi-threaded processing\n");

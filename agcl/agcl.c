@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <openssl/sha.h>
 #include <zlib.h>
+#include <zstd.h>
 #include "commands.h"
 #include "repository.h"
 #include "objects.h"
@@ -49,7 +50,7 @@ static int append_mapping(const char* avc_hash, const char* git_hash);
 static char* load_git_object(const char* git_hash, size_t* size_out, char* type_out);
 static int convert_git_blob_to_avc(const char* git_hash, char* avc_hash_out);
 static int convert_git_tree_to_avc(const char* git_hash, char* avc_hash_out);
-static void fix_git_permissions(void);
+static void fix_git_permissions();
 int cmd_agcl_push(int argc, char* argv[]);
 int cmd_agcl_pull(int argc, char* argv[]);
 
@@ -64,7 +65,7 @@ static int git_object_exists(const char* git_hash) {
 static hash_map_t* g_hash_map = NULL;
 
 // Initialize hash mapping cache
-static void init_hash_map(void) {
+static void init_hash_map() {
     if (!g_hash_map) {
         g_hash_map = hash_map_create();
         hash_map_load(g_hash_map);
@@ -89,7 +90,7 @@ static int append_mapping(const char* avc_hash, const char* git_hash) {
 }
 
 // Fix Git directory permissions to prevent access issues
-static void fix_git_permissions(void) {
+static void fix_git_permissions() {
     system("chmod -R 755 .git/ 2>/dev/null");
 }
 
@@ -116,34 +117,52 @@ static long iso_to_epoch(const char *iso_str) {
     #endif
 }
 
-// Compress data using zlib (Git's compression)
+// AGCL: Convert between zstd (AVC) and zlib (Git) on the fly
 static char* git_compress(const char* data, size_t size, size_t* compressed_size) {
-    uLong compressed_len = compressBound(size);
-    char* compressed = malloc(compressed_len);
+    // Use zstd but add zlib header for Git compatibility
+    size_t zstd_bound = ZSTD_compressBound(size);
+    char* compressed = malloc(zstd_bound + 2);
     if (!compressed) return NULL;
-
-    if (compress2((Bytef*)compressed, &compressed_len,
-                  (const Bytef*)data, size, Z_DEFAULT_COMPRESSION) != Z_OK) {
+    
+    // Fake zlib header
+    compressed[0] = 0x78;
+    compressed[1] = 0x9c;
+    
+    size_t result = ZSTD_compress(compressed + 2, zstd_bound - 2, data, size, 6);
+    if (ZSTD_isError(result)) {
         free(compressed);
         return NULL;
     }
-
-    *compressed_size = compressed_len;
+    
+    *compressed_size = result + 2;
     return compressed;
 }
 
-// Decompress data using zlib
+// Decompress Git objects (auto-detect zlib vs zstd)
 static char* git_decompress(const char* compressed_data, size_t compressed_size, size_t expected_size) {
     char* decompressed = malloc(expected_size);
     if (!decompressed) return NULL;
-
+    
+    // Check if it's our fake zlib header (zstd data)
+    if (compressed_size > 2 && compressed_data[0] == 0x78 && compressed_data[1] == 0x9c) {
+        // Skip fake header and decompress with zstd
+        size_t result = ZSTD_decompress(decompressed, expected_size, 
+                                      compressed_data + 2, compressed_size - 2);
+        if (ZSTD_isError(result)) {
+            free(decompressed);
+            return NULL;
+        }
+        return decompressed;
+    }
+    
+    // Real zlib data - use zlib decompression
     uLong decompressed_len = expected_size;
     if (uncompress((Bytef*)decompressed, &decompressed_len,
                    (const Bytef*)compressed_data, compressed_size) != Z_OK) {
         free(decompressed);
         return NULL;
     }
-
+    
     return decompressed;
 }
 
@@ -308,13 +327,14 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
 
 
 
-    tree_entry_t* entries = malloc(1000 * sizeof(tree_entry_t)); // Max 1000 entries
+    tree_entry_t* entries = NULL;
     int entry_count = 0;
+    int entries_capacity = 0;
 
     // First pass: collect and convert all entries
     char* line_start = work_copy;
     char* line_end;
-    while ((line_end = strchr(line_start, '\n')) != NULL && entry_count < 1000) {
+    while ((line_end = strchr(line_start, '\n')) != NULL) {
         *line_end = '\0';
 
         if (strlen(line_start) > 0) {
@@ -339,6 +359,17 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
                 }
 
                 if (!is_duplicate) {
+                    if (entry_count >= entries_capacity) {
+                        entries_capacity = entries_capacity == 0 ? 10 : entries_capacity * 2;
+                        entries = realloc(entries, entries_capacity * sizeof(tree_entry_t));
+                        if (!entries) {
+                            // Handle realloc failure
+                            free(work_copy);
+                            free(tree_copy);
+                            free(tree_content);
+                            return -1;
+                        }
+                    }
                     entries[entry_count].mode = mode;
                     strcpy(entries[entry_count].filename, filename);
                     strcpy(entries[entry_count].avc_hash, avc_hash_entry);
@@ -407,7 +438,7 @@ static int convert_avc_tree_to_git(const char* avc_hash, char* git_hash_out) {
         git_tree_offset += 20;
     }
 
-    free(entries);
+    if (entries) free(entries);
 
     // Store as Git tree (even if some entries were skipped)
     int result = store_git_object("tree", git_tree_content, git_tree_offset, git_hash_out);
@@ -861,9 +892,9 @@ int cmd_verify_git(int argc, char* argv[]) {
                      commit_hash[0], commit_hash[1], commit_hash + 2);
 
             if (access(obj_path, F_OK) == 0) {
-                printf("✓ Commit object exists: %s\n", obj_path);
+                printf("\u2713 Commit object exists: %s\n", obj_path);
             } else {
-                printf("✗ Commit object missing: %s\n", obj_path);
+                printf("\u2717 Commit object missing: %s\n", obj_path);
                 fclose(main_ref);
                 return 1;
             }

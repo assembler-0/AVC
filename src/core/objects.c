@@ -12,8 +12,9 @@
 #include <omp.h>
 #include "hash.h"
 #include "objects.h"
+#include "compression.h"
 #include <blake3.h>
-#include <libdeflate.h>
+#include <zstd.h>
 
 // Compression constants
 static int g_fast_mode = 0; // 0 = normal, 1 = fast
@@ -28,141 +29,48 @@ void objects_set_fast_mode(int fast) { g_fast_mode = fast; }
 #define COMPRESSOR_POOL_SIZE 16             // Max 16 compressors per thread
 #define MAX_COMPRESSED_SIZE (1024 * 1024 * 1024)  // 1GB max compressed size
 
-// Thread-safe compressor pool
-typedef struct {
-    struct libdeflate_compressor* compressors[COMPRESSOR_POOL_SIZE];
-    struct libdeflate_decompressor* decompressors[COMPRESSOR_POOL_SIZE];
-    int compressor_count;
-    int decompressor_count;
-} compressor_pool_t;
+// All compression now uses zstd. AVC_COMPRESS_LIBDEFLATE is for Git compatibility only.
 
-// Global compressor pool (one per thread)
-static __thread compressor_pool_t* thread_pool = NULL;
-
-// Initialize thread-local compressor pool
-static void init_thread_pool(void) {
-    if (!thread_pool) {
-        thread_pool = calloc(1, sizeof(compressor_pool_t));
-    }
+// NEW: Unified compression wrapper
+char* compress_data_unified(const char* data, size_t size, size_t* compressed_size, int level) {
+    avc_compression_type_t backend = avc_get_compression_backend();
+    if (g_fast_mode) level = (backend == AVC_COMPRESS_ZSTD) ? 1 : 0;
+    return avc_compress(data, size, compressed_size, backend, level);
 }
 
-// Get a compressor from the pool (thread-safe)
-static struct libdeflate_compressor* get_compressor(int level) {
-    if (!thread_pool) {
-        init_thread_pool();
-    }
-    if (!thread_pool) return NULL;
-
-    if (thread_pool->compressor_count > 0) {
-        return thread_pool->compressors[--thread_pool->compressor_count];
-    }
-    
-    struct libdeflate_compressor* compressor = libdeflate_alloc_compressor(level);
-    return compressor;
-}
-
-// Return compressor to pool (thread-safe)
-static void return_compressor(struct libdeflate_compressor* compressor) {
-    if (!thread_pool || !compressor) return;
-
-    if (thread_pool->compressor_count < COMPRESSOR_POOL_SIZE) {
-        thread_pool->compressors[thread_pool->compressor_count++] = compressor;
-    } else {
-        libdeflate_free_compressor(compressor);
-    }
-}
-
-// Get a decompressor from the pool (thread-safe)
-static struct libdeflate_decompressor* get_decompressor(void) {
-    if (!thread_pool) {
-        init_thread_pool();
-    }
-    if (!thread_pool) return NULL;
-
-    if (thread_pool->decompressor_count > 0) {
-        return thread_pool->decompressors[--thread_pool->decompressor_count];
-    }
-    
-    return libdeflate_alloc_decompressor();
-}
-
-// Return decompressor to pool (thread-safe)
-static void return_decompressor(struct libdeflate_decompressor* decompressor) {
-    if (!thread_pool || !decompressor) return;
-
-    if (thread_pool->decompressor_count < COMPRESSOR_POOL_SIZE) {
-        thread_pool->decompressors[thread_pool->decompressor_count++] = decompressor;
-    } else {
-        libdeflate_free_decompressor(decompressor);
-    }
-}
-
-// Wrapper functions for libdeflate compression
-char* compress_data_libdeflate(const char* data, size_t size, size_t* compressed_size, int level) {
+// Legacy wrapper for libdeflate (uses zstd with zlib header for compatibility)
+    char* compress_data_libdeflate(const char* data, size_t size, size_t* compressed_size, int level) {
     if (g_fast_mode) level = 0;
-    struct libdeflate_compressor* compressor = get_compressor(level);
-    if (!compressor) return NULL;
-
-    size_t max_compressed_size = libdeflate_zlib_compress_bound(compressor, size);
-    char* compressed = malloc(max_compressed_size);
-    if (!compressed) {
-        return_compressor(compressor);
-        return NULL;
-    }
-
-    *compressed_size = libdeflate_zlib_compress(compressor, data, size, compressed, max_compressed_size);
-    return_compressor(compressor);
-
-    if (*compressed_size == 0) {
-        free(compressed);
-        return NULL;
-    }
-
-    char* result = realloc(compressed, *compressed_size);
-    return result ? result : compressed;
+    return avc_compress(data, size, compressed_size, AVC_COMPRESS_LIBDEFLATE, level);
 }
 
+// NEW: Unified decompression wrapper
+char* decompress_data_unified(const char* compressed_data, size_t compressed_size, size_t expected_size) {
+    avc_compression_type_t type = avc_detect_compression_type(compressed_data, compressed_size);
+    return avc_decompress(compressed_data, compressed_size, expected_size, type);
+}
+
+// Legacy wrapper for libdeflate
 char* decompress_data_libdeflate(const char* compressed_data, size_t compressed_size, size_t expected_size) {
-    struct libdeflate_decompressor* decompressor = get_decompressor();
-    if (!decompressor) return NULL;
-
-    char* decompressed = malloc(expected_size);
-    if (!decompressed) {
-        return_decompressor(decompressor);
-        return NULL;
-    }
-
-    size_t actual_size;
-    enum libdeflate_result result = libdeflate_zlib_decompress(decompressor, 
-                                                              compressed_data, compressed_size,
-                                                              decompressed, expected_size, &actual_size);
-    return_decompressor(decompressor);
-
-    if (result != LIBDEFLATE_SUCCESS) {
-        free(decompressed);
-        return NULL;
-    }
-
-    char* result_ptr = realloc(decompressed, actual_size);
-    return result_ptr ? result_ptr : decompressed;
+    return avc_decompress(compressed_data, compressed_size, expected_size, AVC_COMPRESS_LIBDEFLATE);
 }
 
-// Wrapper functions for backward compatibility
+// NEW: Use unified compression by default
 char* compress_data(const char* data, size_t size, size_t* compressed_size) {
-    return compress_data_libdeflate(data, size, compressed_size, AVC_COMPRESSION_LEVEL_MAX);
+    return compress_data_unified(data, size, compressed_size, 6);
 }
 
 char* compress_data_aggressive(const char* data, size_t size, size_t* compressed_size) {
-    return compress_data_libdeflate(data, size, compressed_size, AVC_COMPRESSION_LEVEL_MAX);
+    return compress_data_unified(data, size, compressed_size, 9);
 }
 
 char* decompress_data(const char* compressed_data, size_t compressed_size, size_t expected_size) {
-    return decompress_data_libdeflate(compressed_data, compressed_size, expected_size);
+    return decompress_data_unified(compressed_data, compressed_size, expected_size);
 }
 
 // Fast compression wrapper
 char* compress_data_fast(const char* data, size_t size, size_t* compressed_size) {
-    return compress_data_libdeflate(data, size, compressed_size, AVC_COMPRESSION_LEVEL_BALANCED);
+    return compress_data_unified(data, size, compressed_size, 3);
 }
 
 // Wrapper functions for utility functions from compression module
@@ -173,18 +81,7 @@ void show_compression_stats(size_t original_size, size_t compressed_size, const 
     }
 }
 
-int flush_to_file_libdeflate(struct libdeflate_compressor* compressor,
-                                   FILE* fp, unsigned char* buf,
-                                   const unsigned char* data, size_t data_size) {
-    size_t compressed_size = libdeflate_zlib_compress(compressor, data, data_size, buf, 1024 * 1024);
-    if (compressed_size == 0) {
-        return -1;
-    }
-    if (fwrite(buf, 1, compressed_size, fp) != compressed_size) {
-        return -1;
-    }
-    return 0;
-}
+// REMOVED: flush_to_file_libdeflate - no longer needed
 
 // Stream a file into a compressed blob object while computing its SHA-256.
 int store_blob_from_file(const char* filepath, char* hash_out) {
@@ -315,49 +212,7 @@ int blake3_file_hex(const char* filepath, char hash_out[65]) {
     return 0;
 }
 
-// Simple diagnostic function to check object format
-int check_object_format(const char* hash) {
-    char obj_path[512];
-    snprintf(obj_path, sizeof(obj_path), ".avc/objects/%.2s/%s", hash, hash + 2);
-    
-    FILE* obj_file = fopen(obj_path, "rb");
-    if (!obj_file) {
-        return -1;
-    }
-    
-    fseek(obj_file, 0, SEEK_END);
-    size_t compressed_size = ftell(obj_file);
-    fseek(obj_file, 0, SEEK_SET);
-    
-    if (compressed_size < 4) {
-        fclose(obj_file);
-        return -1;
-    }
-    
-    unsigned char header[4];
-    fread(header, 1, 4, obj_file);
-    fclose(obj_file);
-    
-    // Check if it looks like zlib compressed data
-    if ((header[0] & 0x0f) == 0x08) {
-        return 0;
-    }
-    
-    // Check if it looks like uncompressed data
-    if (header[0] == 'b' && header[1] == 'l' && header[2] == 'o' && header[3] == 'b') {
-        return 1;
-    }
-    
-    if (header[0] == 't' && header[1] == 'r' && header[2] == 'e' && header[3] == 'e') {
-        return 1;
-    }
-    
-    if (header[0] == 'c' && header[1] == 'o' && header[2] == 'm' && header[3] == 'm') {
-        return 1;
-    }
-    
-    return -1;
-}
+
 
 char* load_object(const char* hash, size_t* size_out, char* type_out) {
     char obj_path[512];
@@ -383,39 +238,23 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     }
     fclose(obj_file);
 
-    // Optimized decompression - start with larger buffer
-    size_t estimated_size = compressed_size * 20; // Increased from 5 to 20
-    char* decompressed = malloc(estimated_size);
+    // AUTO-DETECT and decompress with unified layer
+    size_t estimated_size = compressed_size * 20;
+    char* decompressed = decompress_data_unified(compressed_data, compressed_size, estimated_size);
+    
+    // Retry with larger buffer if needed
     if (!decompressed) {
-        free(compressed_data);
-        return NULL;
-    }
-
-    struct libdeflate_decompressor* decompressor = get_decompressor();
-    size_t actual_size;
-    enum libdeflate_result result = libdeflate_zlib_decompress(
-        decompressor, compressed_data, compressed_size, 
-        decompressed, estimated_size, &actual_size);
-    
-    if (result == LIBDEFLATE_INSUFFICIENT_SPACE) {
-        // Only retry once with much larger buffer
-        free(decompressed);
         estimated_size = compressed_size * 50;
-        decompressed = malloc(estimated_size);
-        if (decompressed) {
-            result = libdeflate_zlib_decompress(
-                decompressor, compressed_data, compressed_size, 
-                decompressed, estimated_size, &actual_size);
-        }
+        decompressed = decompress_data_unified(compressed_data, compressed_size, estimated_size);
     }
     
-    return_decompressor(decompressor);
     free(compressed_data);
-
-    if (result != LIBDEFLATE_SUCCESS || !decompressed) {
-        if (decompressed) free(decompressed);
+    
+    if (!decompressed) {
         return NULL;
     }
+    
+    size_t actual_size = estimated_size; // Will be corrected by parsing
 
     // Parse the decompressed content
     char* null_pos = memchr(decompressed, '\0', actual_size);
@@ -440,32 +279,9 @@ char* load_object(const char* hash, size_t* size_out, char* type_out) {
     return content;
 }
 
-// Clean up thread-local compressor pool
-static void cleanup_thread_pool(void) {
-    if (thread_pool) {
-        // Free all compressors
-        for (int i = 0; i < thread_pool->compressor_count; i++) {
-            if (thread_pool->compressors[i]) {
-                libdeflate_free_compressor(thread_pool->compressors[i]);
-            }
-        }
-        
-        // Free all decompressors
-        for (int i = 0; i < thread_pool->decompressor_count; i++) {
-            if (thread_pool->decompressors[i]) {
-                libdeflate_free_decompressor(thread_pool->decompressors[i]);
-            }
-        }
-        
-        free(thread_pool);
-        thread_pool = NULL;
-        }
-}
-
 // Free memory pool (call periodically)
 void free_memory_pool(void) {
-    // Clean up thread-local pools
-    cleanup_thread_pool();
+    // Nothing to clean up - contexts are managed in compression.c
 }
 
 // Reset memory pool (reuse chunks instead of freeing)

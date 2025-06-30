@@ -15,6 +15,7 @@ int cmd_rm(int argc, char* argv[]);
 int cmd_reset(int argc, char* argv[]);
 int cmd_version(int argc, char* argv[]);
 int cmd_clean(int argc, char* argv[]);
+int cmd_repo_migrate(int argc, char* argv[]);
 int cmd_agcl(int argc, char* argv[]);
 
 #endif

@@ -3,7 +3,7 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O3 -std=c99 -fopenmp
-LIBS = -lssl -lcrypto -lz -ldeflate -lblake3 -fopenmp -lm
+LIBS = -lssl -lcrypto -lz -lzstd -lblake3 -fopenmp -lm
 
 # Directories
 SRC_DIR = src
@@ -80,7 +80,7 @@ deps:
 	@pkg-config --exists openssl || (echo "❌ OpenSSL not found" && exit 1)
 	@pkg-config --exists zlib || (echo "❌ zlib not found" && exit 1)
 	@echo "✓ Core dependencies found"
-	@echo "Note: Ensure libdeflate and libblake3 are installed"
+	@echo "Note: Ensure zstd and libblake3 are installed"
 
 # Test build
 test: $(TARGET)
@@ -107,7 +107,7 @@ help:
 	@echo "  - gcc with OpenMP support"
 	@echo "  - OpenSSL development headers"
 	@echo "  - zlib development headers"
-	@echo "  - libdeflate library"
+	@echo "  - zstd library"
 	@echo "  - libblake3 library"
 
 # Phony targets

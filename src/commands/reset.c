@@ -156,8 +156,7 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     size_t commit_size;
     char commit_type[16];
     
-    // Check object format first
-    check_object_format(commit_hash);
+    
     
     char* commit_content = load_object(commit_hash, &commit_size, commit_type);
     if (!commit_content) {
@@ -209,8 +208,7 @@ int reset_to_commit(const char* commit_hash, int hard_reset) {
     size_t tree_size;
     char tree_type[16];
     
-    // Check tree object format
-    check_object_format(tree_hash);
+    
     
     char* tree_content = load_object(tree_hash, &tree_size, tree_type);
     if (!tree_content) {

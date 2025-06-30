@@ -131,7 +131,7 @@ avc reset --clean --hard <hash>
 * **Multi-threading** – AVC automatically detects CPU cores for parallel processing
 * **Git Compatibility** – Use AGCL to push AVC repos directly to GitHub/GitLab
 * **Cross-platform** – Use `-DAVC_PORTABLE_BUILD=ON` for ARM/older CPUs
-* **Compression** – libdeflate compression enabled by default for efficiency
+* **Compression** – zstd compression enabled by default for efficiency
 * **Hardware** – SSDs and plenty of RAM noticeably speed up operations
 
 ---

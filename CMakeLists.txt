@@ -38,7 +38,7 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(OpenMP)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBDEFLATE REQUIRED libdeflate)
+pkg_check_modules(ZSTD REQUIRED libzstd)
 
 # BLAKE3 source files
 set(BLAKE3_SOURCES
@@ -60,6 +60,7 @@ add_library(blake3 STATIC ${BLAKE3_SOURCES})
 target_include_directories(blake3 PUBLIC src/blake3)
 # Create a library for core functionality
 add_library(avc_core STATIC
+
         # Core modules
         src/core/hash.c
         src/core/index.c
@@ -67,6 +68,8 @@ add_library(avc_core STATIC
         src/core/memory_pool.c
         src/core/objects.c
         src/core/repository.c
+        src/core/compression.c
+        src/core/repository_format.c
 
         # Utilities
         src/utils/file_utils.c
@@ -83,32 +86,31 @@ add_library(avc_core STATIC
         src/commands/status.c
         src/commands/version.c
         src/commands/clean.c
+        src/commands/migrate.c
         agcl/agcl.c
         agcl/fast_agcl.c
 )
 
 # Set library properties
 target_include_directories(avc_core PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/api
+#        ${CMAKE_CURRENT_SOURCE_DIR}/api
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core
         ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
         ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
         ${CMAKE_CURRENT_SOURCE_DIR}/agcl
         ${OPENSSL_INCLUDE_DIR}
-        ${LIBDEFLATE_INCLUDE_DIRS}
+        ${ZSTD_INCLUDE_DIRS}
 )
 
 target_link_libraries(avc_core PUBLIC
-        ${LIBDEFLATE_LIBRARIES}
+        ${ZSTD_LIBRARIES}
         OpenMP::OpenMP_C
         blake3
         OpenSSL::SSL
         OpenSSL::Crypto
-        z
         m
 )
-# BLAKE3 SIMD configuration
 if(AVC_PORTABLE_BUILD)
     target_compile_definitions(blake3 PUBLIC 
         BLAKE3_NO_SSE2=1
@@ -171,7 +173,7 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Archive Version Control - A Git-like VCS")
 set(CPACK_PACKAGE_CONTACT "your.email@example.com")
 set(CPACK_GENERATOR "TGZ;DEB")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3, libdeflate0")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3, libzstd1")
 include(CPack)
 
 # Testing configuration
