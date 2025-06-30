@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-usable-orange.svg)]()
 
-**AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, libdeflate compression, and multi-threaded operations.
+**AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, zstd compression, and multi-threaded operations.
 
 ---
 
@@ -48,13 +48,13 @@
 - **Empty directory support** - Optional preservation with `-e` flag
 - **.avcignore support** - Skip files/directories using ignore patterns
 - **Multi-threaded operations** - Parallel processing for speed
-- **Intelligent compression** - Smart libdeflate compression with size optimization
+- **Intelligent compression** - Smart zstd compression with size optimization
 - **Cross-platform builds** - ARM/portable build support
 - **Large file support** - Handles files up to 1GB with optimized memory management
 
 ### 🚀 Performance Optimizations
 - **OpenMP parallelization** - Multi-threaded file processing
-- **Fast compression** - Level 6 libdeflate with smart detection
+- **Fast compression** - Level 6 zstd with smart detection
 - **Memory-efficient operations** - Streaming file processing
 - **Optimized object storage** - Git-style subdirectory structure
 - **Progress indicators** - Real-time operation feedback
@@ -62,7 +62,7 @@
 
 ### 🛡️ Advanced Features
 - **Smart compression detection** - Avoids double-compressing already compressed files
-- **Consistent compression** - Pure libdeflate compression with no fallbacks
+- **Consistent compression** - Pure zstd compression with no fallbacks
 - **Directory removal** - `-r` flag for recursive directory operations
 - **Thread configuration** - Automatic CPU core detection and utilization
 - **Repository cleanup** - `clean` command to remove entire repository
@@ -160,7 +160,7 @@ node_modules/
 ## 🏗️ Architecture
 
 ### Dual Format Support
-- **AVC Format**: BLAKE3 hashes (64-char) + libdeflate compression
+- **AVC Format**: BLAKE3 hashes (64-char) + zstd compression
 - **Git Format**: SHA-1 hashes (40-char) + zlib compression
 - **AGCL Bridge**: Converts between formats seamlessly
 - **GitHub Compatible**: Push AVC repos to any Git hosting service
@@ -168,7 +168,7 @@ node_modules/
 ### Object Storage
 - **BLAKE3 hashing** for fast, secure content addressing
 - **Git-style subdirectories** (`.avc/objects/ab/cdef...`)
-- **Pure libdeflate compression** with consistent compressed storage
+- **Pure zstd compression** with consistent compressed storage
 - **Streaming operations** for memory efficiency
 - **Large file optimization** with 1MB chunks and 1GB file support
 
@@ -179,7 +179,7 @@ node_modules/
 - **Thread-safe operations** throughout the codebase
 
 ### Compression Strategy
-- **Pure libdeflate compression** for consistent performance
+- **Pure zstd compression** for consistent performance
 - **No fallback compression** - eliminates compatibility issues
 - **Large buffer support** - 1MB compression buffers for big files
 - **Memory pool optimization** - Efficient allocation for large operations
@@ -195,7 +195,7 @@ node_modules/
 5. **Large files are optimized** - 1MB chunks and 1GB file support
 
 ### For Maximum Compression
-1. **Consistent compression** - Pure libdeflate for reliability
+1. **Consistent compression** - Pure zstd for reliability
 2. **Focus on text files** for best compression ratios
 3. **Large file handling** - Optimized for files up to 1GB
 
@@ -234,7 +234,7 @@ This project is licensed under the **GPL License** - see the [LICENSE](LICENSE) 
 
 - **Git** - For inspiration and workflow concepts
 - **OpenSSL** - For cryptographic functions
-- **libdeflate** - For compression capabilities
+- **zstd** - For compression capabilities
 - **OpenMP** - For parallel processing support
 
 ## 📞 Support

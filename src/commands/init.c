@@ -4,7 +4,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <unistd.h>
 #include "commands.h"
+#include "repository_format.h"
 
 // Helper function to create directory
 int create_dir(const char* path) {
@@ -94,7 +96,28 @@ int cmd_init(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("Initialized empty avc repository in %s/.avc/\n", repo_path);
+    // Set repository format to current version
+    char format_file[512];
+    snprintf(format_file, sizeof(format_file), "%s/.avc", repo_path);
+    
+    // Change to repo directory temporarily to set format
+    char* old_cwd = getcwd(NULL, 0);
+    if (chdir(repo_path) == 0) {
+        if (avc_repo_set_format_version(AVC_FORMAT_CURRENT) != 0) {
+            fprintf(stderr, "Failed to set repository format\n");
+            if (old_cwd) {
+                chdir(old_cwd);
+                free(old_cwd);
+            }
+            return 1;
+        }
+        if (old_cwd) {
+            chdir(old_cwd);
+            free(old_cwd);
+        }
+    }
+
+    printf("Initialized empty avc repository in %s/.avc/ (format v%d)\n", repo_path, AVC_FORMAT_CURRENT);
     
     return 0;
 }

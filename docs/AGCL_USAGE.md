@@ -5,7 +5,7 @@
 ## Overview
 
 AGCL converts between two formats:
-- **AVC Format**: BLAKE3 hashes (64-char) + libdeflate compression
+- **AVC Format**: BLAKE3 hashes (64-char) + zstd compression
 - **Git Format**: SHA-1 hashes (40-char) + zlib compression
 
 ## Complete Workflow
@@ -159,7 +159,7 @@ avc agcl git-init
 - **Commits**: Header parsing and timestamp conversion
 
 ### Compression Conversion
-- **AVC**: libdeflate compression
+- **AVC**: zstd compression
 - **Git**: zlib compression
 - **Automatic**: AGCL handles compression format differences
 
@@ -218,4 +218,4 @@ avc agcl sync-to-git
 git push origin main
 ```
 
-AGCL makes AVC the first version control system with native GitHub compatibility while maintaining the performance benefits of BLAKE3 and libdeflate compression.
+AGCL makes AVC the first version control system with native GitHub compatibility while maintaining the performance benefits of BLAKE3 and zstd compression.

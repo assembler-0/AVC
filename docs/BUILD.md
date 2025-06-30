@@ -24,7 +24,7 @@ AVC is developed primarily on Linux, but it should compile fine on macOS and the
 | **GCC / Clang** | GCC 7  or Clang 6 | `build-essential` or `clang` | `gcc` / `clang` | `base-devel` |
 | **CMake** | 3.20 | `cmake` | `cmake` | `cmake` |
 | **OpenSSL** | 1.1.1 | `libssl-dev` | `openssl-devel` | `openssl` |
-| **libdeflate** | 1.0 | `libdeflate-dev` | `libdeflate-devel` | `libdeflate` |
+| **zstd** | 1.4 | `libzstd-dev` | `libzstd-devel` | `zstd` |
 | **OpenMP** | – | Comes with GCC/Clang | Comes with GCC/Clang | In toolchain |
 
 > Tip: On very old distributions you may need to install a newer CMake from Kitware’s APT/Yum repos.
@@ -34,23 +34,23 @@ AVC is developed primarily on Linux, but it should compile fine on macOS and the
 Ubuntu / Debian:
 ```bash
 sudo apt update
-sudo apt install build-essential cmake libssl-dev libdeflate-dev clang
+sudo apt install build-essential cmake libssl-dev zstd-dev clang
 ```
 
 Fedora / RHEL:
 ```bash
 sudo dnf groupinstall "Development Tools"
-sudo dnf install cmake openssl-devel libdeflate-devel clang
+sudo dnf install cmake openssl-devel zstd-devel clang
 ```
 
 Arch / Manjaro:
 ```bash
-sudo pacman -S --needed base-devel cmake openssl libdeflate clang
+sudo pacman -S --needed base-devel cmake openssl zstd clang
 ```
 
 macOS (Homebrew):
 ```bash
-brew install cmake openssl libdeflate llvm
+brew install cmake openssl zstd llvm
 ```
 
 ---
