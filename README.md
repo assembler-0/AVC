@@ -1,8 +1,7 @@
-# AVC - Archive Version Control v0.3.0 "Delta Spectre" - SPEED
-
+# AVC - Archive Version Control v0.4.0 "Velocity" 
 [![License: GPL](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
-[![Build Status](https://img.shields.io/badge/build-usable-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-0.5.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
+[![Build Status](https://img.shields.io/badge/build-stable-greeen.svg)]()
 
 **AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, zstd compression, and multi-threaded operations.
 
@@ -22,19 +21,19 @@
 ## 🚀 Performance Highlights
 
 ### Benchmark Results (95000+ files)
-| Operation                        | AVC   | Git     | Performance               |
-|----------------------------------|-------|---------|---------------------------|
-| **Init**                         | 0.001 | 0.001s  | ⚡ Equal                   |
-| **Add**                          | 2.6s  | 11.358s | ⚡ Up to **4.4x** faster   |
-| **Commit**                       | 0.4s  | 5.766s  | 🚀 **Up to 14.1x faster** |
+| Operation                        | AVC    | Git     | Performance               |
+|----------------------------------|--------|---------|---------------------------|
+| **Init**                         | 0.001  | 0.001s  | ⚡ Equal                   |
+| **Add**                          | 1.621s | 11.358s | ⚡ Up to **7x** faster     |
+| **Commit**                       | 0.370s | 5.766s  | 🚀 **Up to 15.6x faster** |
 | **Reset****                      | 0.854s | 3.236s  | ⚡ 3.8x faster             |
-| **Size (pre-commit)** | 540MB | 634MB   | 💾 **Up to 1.2x smaller** |
+| **Size (pre-commit)** | 521MB  | 634MB   | 💾 **Up to 1.2x smaller** |
 
 **Best run*
 
 ***Directory is cleaned for each run*
 
-*Tested on Linux with Kernel 6.15.3 source, multi-threaded operations enabled*
+*Tested on Linux with Kernel 6.15.3 source with Intel Core i3-12100F*
 
 ## ✨ Key Features
 

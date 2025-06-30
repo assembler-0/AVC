@@ -6,8 +6,8 @@
 #include "commands.h"
 
 // Version information
-#define AVC_VERSION "0.3.0"
-#define AVC_CODENAME "Delta Spectre"
+#define AVC_VERSION "0.4.0"
+#define AVC_CODENAME "Velocity"
 #define AVC_BUILD_DATE __DATE__
 #define AVC_BUILD_TIME __TIME__
 
@@ -45,7 +45,7 @@ int cmd_version(int argc, char* argv[]) {
     printf("  • Smart object deduplication\n");
     printf("\n");
     printf("Author: Atheria\n");
-    printf("License: GPL\n");
+    printf("License: GPL-3.0\n");
     printf("Repository: AVC\n");
     
     return 0;

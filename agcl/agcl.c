@@ -24,7 +24,6 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 
 
 // Git object types
@@ -117,52 +116,34 @@ static long iso_to_epoch(const char *iso_str) {
     #endif
 }
 
-// AGCL: Convert between zstd (AVC) and zlib (Git) on the fly
+// FIXED AGCL: Use REAL zlib compression for Git compatibility
 static char* git_compress(const char* data, size_t size, size_t* compressed_size) {
-    // Use zstd but add zlib header for Git compatibility
-    size_t zstd_bound = ZSTD_compressBound(size);
-    char* compressed = malloc(zstd_bound + 2);
+    uLong compressed_len = compressBound(size);
+    char* compressed = malloc(compressed_len);
     if (!compressed) return NULL;
-    
-    // Fake zlib header
-    compressed[0] = 0x78;
-    compressed[1] = 0x9c;
-    
-    size_t result = ZSTD_compress(compressed + 2, zstd_bound - 2, data, size, 6);
-    if (ZSTD_isError(result)) {
+
+    if (compress2((Bytef*)compressed, &compressed_len,
+                  (const Bytef*)data, size, Z_DEFAULT_COMPRESSION) != Z_OK) {
         free(compressed);
         return NULL;
     }
-    
-    *compressed_size = result + 2;
+
+    *compressed_size = compressed_len;
     return compressed;
 }
 
-// Decompress Git objects (auto-detect zlib vs zstd)
+// Decompress Git objects with real zlib
 static char* git_decompress(const char* compressed_data, size_t compressed_size, size_t expected_size) {
     char* decompressed = malloc(expected_size);
     if (!decompressed) return NULL;
-    
-    // Check if it's our fake zlib header (zstd data)
-    if (compressed_size > 2 && compressed_data[0] == 0x78 && compressed_data[1] == 0x9c) {
-        // Skip fake header and decompress with zstd
-        size_t result = ZSTD_decompress(decompressed, expected_size, 
-                                      compressed_data + 2, compressed_size - 2);
-        if (ZSTD_isError(result)) {
-            free(decompressed);
-            return NULL;
-        }
-        return decompressed;
-    }
-    
-    // Real zlib data - use zlib decompression
+
     uLong decompressed_len = expected_size;
     if (uncompress((Bytef*)decompressed, &decompressed_len,
                    (const Bytef*)compressed_data, compressed_size) != Z_OK) {
         free(decompressed);
         return NULL;
     }
-    
+
     return decompressed;
 }
 

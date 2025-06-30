@@ -116,7 +116,7 @@ const char* index_get_hash(const char* filepath);
 // VERSION INFO
 // =============================================================================
 
-#define AVC_VERSION "0.3.1"
-#define AVC_CODENAME "Delta Spectre"
+#define AVC_VERSION "0.4.0"
+#define AVC_CODENAME "Velocity"
 
 #endif // AVC_H

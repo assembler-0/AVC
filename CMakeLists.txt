@@ -109,6 +109,7 @@ target_link_libraries(avc_core PUBLIC
         blake3
         OpenSSL::SSL
         OpenSSL::Crypto
+        z
         m
 )
 if(AVC_PORTABLE_BUILD)

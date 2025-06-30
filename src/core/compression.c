@@ -85,36 +85,8 @@ char* avc_compress(const char* data, size_t size, size_t* compressed_size,
         }
         
         case AVC_COMPRESS_LIBDEFLATE: {
-            // Legacy format - use zstd with fake zlib header
-            size_t max_size = ZSTD_compressBound(size);
-            char* compressed = malloc(max_size + 2);
-            if (!compressed) return NULL;
-            
-            // Fake zlib header for compatibility
-            compressed[0] = 0x78;
-            compressed[1] = 0x9c;
-            
-            // Multi-threaded for large files even in legacy mode
-            size_t result;
-            if (size > 1024*1024) {
-                init_zstd_contexts();
-                if (g_cctx) {
-                    ZSTD_CCtx_setParameter(g_cctx, ZSTD_c_compressionLevel, level);
-                    result = ZSTD_compress2(g_cctx, compressed + 2, max_size - 2, data, size);
-                } else {
-                    result = ZSTD_compress(compressed + 2, max_size - 2, data, size, level);
-                }
-            } else {
-                result = ZSTD_compress(compressed + 2, max_size - 2, data, size, level);
-            }
-            
-            if (ZSTD_isError(result)) {
-                free(compressed);
-                return NULL;
-            }
-            
-            *compressed_size = result + 2;
-            return realloc(compressed, *compressed_size);
+            // EMERGENCY: Redirect to zstd - no fake headers
+            return avc_compress(data, size, compressed_size, AVC_COMPRESS_ZSTD, level);
         }
     }
     
@@ -147,34 +119,8 @@ char* avc_decompress(const char* compressed_data, size_t compressed_size,
         }
         
         case AVC_COMPRESS_LIBDEFLATE: {
-            // Legacy format - skip fake zlib header
-            if (compressed_size < 2) return NULL;
-            
-            char* decompressed = malloc(expected_size);
-            if (!decompressed) return NULL;
-            
-            // Multi-threaded decompression for large files
-            size_t result;
-            if (expected_size > 1024*1024) {
-                init_zstd_contexts();
-                if (g_dctx) {
-                    result = ZSTD_decompressDCtx(g_dctx, decompressed, expected_size, 
-                                               compressed_data + 2, compressed_size - 2);
-                } else {
-                    result = ZSTD_decompress(decompressed, expected_size, 
-                                           compressed_data + 2, compressed_size - 2);
-                }
-            } else {
-                result = ZSTD_decompress(decompressed, expected_size, 
-                                       compressed_data + 2, compressed_size - 2);
-            }
-            
-            if (ZSTD_isError(result)) {
-                free(decompressed);
-                return NULL;
-            }
-            
-            return decompressed;
+            // EMERGENCY: Redirect to zstd - no fake headers
+            return avc_decompress(compressed_data, compressed_size, expected_size, AVC_COMPRESS_ZSTD);
         }
     }
     
