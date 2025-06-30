@@ -34,7 +34,7 @@ void objects_set_fast_mode(int fast) { g_fast_mode = fast; }
 // NEW: Unified compression wrapper
 char* compress_data_unified(const char* data, size_t size, size_t* compressed_size, int level) {
     avc_compression_type_t backend = avc_get_compression_backend();
-    if (g_fast_mode) level = (backend == AVC_COMPRESS_ZSTD) ? 1 : 0;
+    if (g_fast_mode) level = 0;
     return avc_compress(data, size, compressed_size, backend, level);
 }
 
