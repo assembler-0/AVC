@@ -108,11 +108,8 @@ static long iso_to_epoch(const char *iso_str) {
     #ifdef _GNU_SOURCE
     return timegm(&tm);
     #else
-    // For systems without timegm, manually adjust for UTC
-    time_t local_time = mktime(&tm);
-    struct tm *utc_tm = gmtime(&local_time);
-    time_t utc_time = mktime(utc_tm);
-    return local_time + (local_time - utc_time);
+    // For systems without timegm, mktime assumes local time, which is fine now
+    return mktime(&tm);
     #endif
 }
 

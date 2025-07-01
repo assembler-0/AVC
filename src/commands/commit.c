@@ -22,7 +22,8 @@ typedef struct {
     int entry_len;
 } file_entry_t;
 
-// Comparator for qsort – lexicographic order on filepath
+// Comparator for qsort 
+ // lexicographic order on filepath
 static int file_entry_cmp(const void *a, const void *b) {
     const file_entry_t *fa = (const file_entry_t *)a;
     const file_entry_t *fb = (const file_entry_t *)b;
@@ -416,7 +417,7 @@ int cmd_commit(int argc, char* argv[]) {
     if (!email) email = "user@example.com";
 
     // Format date as YYYY-MM-DD HH:MM:SS (Git format)
-    struct tm* tm_info = localtime(&now);
+    struct tm* tm_info = gmtime(&now);
     char date_str[64];
     strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M:%S", tm_info);
 
