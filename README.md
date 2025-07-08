@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)](https://github.com/assembler-0/AVC/releases)
 [![Build Status](https://img.shields.io/badge/build-stable-greeen.svg)]()
 
-**AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, zstd compression, and multi-threaded operations.
+**AVC** (Archive Version Control) is a high-performance version control system with **full bidirectional Git compatibility** (kinda) through AGCL (AVC Git Compatibility Layer). Migrate existing Git repositories, collaborate with Git users, and push to GitHub/GitLab while enjoying BLAKE3 hashing, zstd compression, and multi-threaded operations.
 
 ---
 
